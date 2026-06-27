@@ -5,61 +5,972 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mi CRM</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --primary-light: #e0e7ff;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg: #f8fafc;
+      --sidebar: #1e1b4b;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --card: #ffffff;
     }
 
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
       min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 240px;
+      background: var(--sidebar);
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      flex-shrink: 0;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+    }
+
+    .sidebar-brand {
+      padding: 24px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .sidebar-brand h2 {
+      color: #fff;
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .sidebar-brand span {
+      color: var(--primary);
+    }
+
+    .sidebar-brand p {
+      color: rgba(255,255,255,0.4);
+      font-size: 0.72rem;
+      margin-top: 2px;
+    }
+
+    .sidebar nav { padding: 16px 0; flex: 1; }
+
+    .nav-section {
+      padding: 8px 20px 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.3);
+    }
+
+    .nav-item {
       display: flex;
       align-items: center;
-      justify-content: center;
-    }
-
-    .container {
-      text-align: center;
-      padding: 60px 40px;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-    }
-
-    h1 {
-      font-size: 3rem;
-      color: #2d2d2d;
-      margin-bottom: 40px;
-      letter-spacing: -1px;
-    }
-
-    button {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      padding: 16px 48px;
-      font-size: 1.1rem;
-      border-radius: 50px;
+      gap: 12px;
+      padding: 10px 20px;
+      color: rgba(255,255,255,0.6);
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
+      transition: all 0.15s;
+      border-left: 3px solid transparent;
+      font-size: 0.9rem;
     }
 
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5);
+    .nav-item:hover { color: #fff; background: rgba(255,255,255,0.05); }
+
+    .nav-item.active {
+      color: #fff;
+      background: rgba(99,102,241,0.2);
+      border-left-color: var(--primary);
     }
 
-    button:active {
-      transform: translateY(0);
+    .nav-item .icon { font-size: 1.1rem; width: 20px; text-align: center; }
+
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 34px; height: 34px;
+      background: var(--primary);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer .info p { color: rgba(255,255,255,0.8); font-size: 0.82rem; font-weight: 600; }
+    .sidebar-footer .info span { color: rgba(255,255,255,0.35); font-size: 0.72rem; }
+
+    /* ── MAIN ── */
+    .main {
+      margin-left: 240px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
+    }
+
+    .topbar h1 { font-size: 1.15rem; font-weight: 700; }
+    .topbar p { font-size: 0.8rem; color: var(--muted); margin-top: 1px; }
+
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: var(--bg); }
+
+    .content { padding: 28px; flex: 1; }
+
+    /* ── TABS ── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    /* ── DASHBOARD ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .kpi-label { font-size: 0.78rem; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+    .kpi-value { font-size: 2rem; font-weight: 800; color: var(--text); line-height: 1; }
+    .kpi-delta { font-size: 0.78rem; margin-top: 6px; font-weight: 600; }
+    .kpi-delta.up { color: var(--success); }
+    .kpi-delta.down { color: var(--danger); }
+
+    .kpi-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+      margin-bottom: 12px;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+
+    .activity-list { list-style: none; }
+    .activity-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .activity-list li:last-child { border-bottom: none; }
+    .activity-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+    .activity-list .meta { color: var(--muted); font-size: 0.75rem; margin-top: 2px; }
+
+    .pipeline-bar { margin-top: 12px; }
+    .pipeline-item { margin-bottom: 14px; }
+    .pipeline-item .label {
+      display: flex; justify-content: space-between;
+      font-size: 0.82rem; margin-bottom: 5px;
+    }
+    .bar-track { background: var(--bg); border-radius: 99px; height: 8px; }
+    .bar-fill { height: 8px; border-radius: 99px; }
+
+    /* ── TABLE ── */
+    .table-wrap { overflow-x: auto; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    thead th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    tbody td { padding: 13px 14px; border-bottom: 1px solid var(--border); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--bg); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-danger  { background: #fee2e2; color: #991b1b; }
+    .badge-info    { background: #dbeafe; color: #1e40af; }
+    .badge-muted   { background: #f1f5f9; color: #475569; }
+
+    .client-cell { display: flex; align-items: center; gap: 10px; }
+    .client-avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.78rem; color: #fff;
+      flex-shrink: 0;
+    }
+    .client-name { font-weight: 600; }
+    .client-email { font-size: 0.75rem; color: var(--muted); }
+
+    /* ── VENTAS KANBAN ── */
+    .kanban {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .kanban-col { background: var(--bg); border-radius: 12px; padding: 14px; }
+    .kanban-col-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .kanban-col-title { font-size: 0.82rem; font-weight: 700; }
+    .kanban-count {
+      background: var(--border);
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 99px;
+    }
+
+    .kanban-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 10px;
+      font-size: 0.84rem;
+    }
+    .kanban-card:last-child { margin-bottom: 0; }
+    .kanban-card .deal-name { font-weight: 600; margin-bottom: 4px; }
+    .kanban-card .deal-company { font-size: 0.76rem; color: var(--muted); margin-bottom: 10px; }
+    .kanban-card .deal-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.76rem;
+    }
+    .deal-value { font-weight: 700; color: var(--primary); }
+
+    /* ── TAREAS ── */
+    .task-filters { display: flex; gap: 8px; margin-bottom: 18px; }
+    .filter-btn {
+      padding: 6px 14px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .filter-btn.active, .filter-btn:hover {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    .task-list { display: flex; flex-direction: column; gap: 10px; }
+    .task-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .task-check {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      flex-shrink: 0;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .task-check:hover { border-color: var(--primary); }
+    .task-check.done { background: var(--success); border-color: var(--success); color: #fff; font-size: 0.7rem; }
+
+    .task-info { flex: 1; }
+    .task-title { font-size: 0.88rem; font-weight: 600; }
+    .task-title.done { text-decoration: line-through; color: var(--muted); }
+    .task-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+    .priority { padding: 2px 8px; border-radius: 99px; font-size: 0.7rem; font-weight: 700; }
+    .priority-alta    { background: #fee2e2; color: #991b1b; }
+    .priority-media   { background: #fef3c7; color: #92400e; }
+    .priority-baja    { background: #d1fae5; color: #065f46; }
+
+    /* ── REPORTES ── */
+    .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .chart-placeholder {
+      background: linear-gradient(135deg, var(--primary-light), #f0f9ff);
+      border-radius: 8px;
+      height: 160px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.82rem; color: var(--muted);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 0 10px; }
+    .bar-chart .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .bar-chart .bar-col .b {
+      width: 100%; border-radius: 6px 6px 0 0;
+      transition: opacity 0.15s;
+    }
+    .bar-chart .bar-col .b:hover { opacity: 0.8; }
+    .bar-chart .bar-col span { font-size: 0.68rem; color: var(--muted); }
+
+    .donut-wrap { display: flex; align-items: center; gap: 20px; }
+    .donut { width: 100px; height: 100px; }
+    .donut-legend { font-size: 0.78rem; display: flex; flex-direction: column; gap: 6px; }
+    .donut-legend li { display: flex; align-items: center; gap: 6px; list-style: none; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    .stat-row { display: flex; gap: 16px; margin-top: 16px; }
+    .stat-box {
+      flex: 1;
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-box .num { font-size: 1.6rem; font-weight: 800; }
+    .stat-box .lbl { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(2,1fr); }
+      .kanban { grid-template-columns: repeat(2,1fr); }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Bienvenido a mi CRM</h1>
-    <button onclick="alert('¡Hola!')">Comenzar</button>
+
+<!-- ══ SIDEBAR ══ -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h2>Mi<span>CRM</span></h2>
+    <p>Panel de gestión</p>
   </div>
+  <nav>
+    <div class="nav-section">Principal</div>
+    <div class="nav-item active" onclick="goTab('dashboard', this)">
+      <span class="icon">📊</span> Dashboard
+    </div>
+    <div class="nav-item" onclick="goTab('clientes', this)">
+      <span class="icon">👥</span> Clientes
+    </div>
+    <div class="nav-item" onclick="goTab('ventas', this)">
+      <span class="icon">💼</span> Ventas
+    </div>
+    <div class="nav-section">Seguimiento</div>
+    <div class="nav-item" onclick="goTab('tareas', this)">
+      <span class="icon">✅</span> Tareas
+    </div>
+    <div class="nav-item" onclick="goTab('reportes', this)">
+      <span class="icon">📈</span> Reportes
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="avatar">EA</div>
+    <div class="info">
+      <p>Erix Salas</p>
+      <span>Administrador</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div>
+      <h1 id="page-title">Dashboard</h1>
+      <p id="page-sub">Resumen general de tu negocio</p>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-outline">🔔</button>
+      <button class="btn btn-primary" id="main-action" onclick="handleAction()">+ Nuevo cliente</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══ DASHBOARD ══ -->
+    <div class="tab-panel active" id="tab-dashboard">
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:#e0e7ff">👥</div>
+          <div class="kpi-label">Clientes activos</div>
+          <div class="kpi-value">124</div>
+          <div class="kpi-delta up">▲ 12% este mes</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:#d1fae5">💰</div>
+          <div class="kpi-label">Ingresos del mes</div>
+          <div class="kpi-value">$48,200</div>
+          <div class="kpi-delta up">▲ 8.3% vs mes anterior</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:#fef3c7">💼</div>
+          <div class="kpi-label">Ventas en proceso</div>
+          <div class="kpi-value">37</div>
+          <div class="kpi-delta down">▼ 3 cerradas hoy</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon" style="background:#fee2e2">⏳</div>
+          <div class="kpi-label">Tareas pendientes</div>
+          <div class="kpi-value">18</div>
+          <div class="kpi-delta up">▲ 5 para hoy</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <!-- Actividad reciente -->
+        <div class="card">
+          <div class="card-title">Actividad reciente</div>
+          <ul class="activity-list">
+            <li>
+              <div class="activity-dot" style="background:#6366f1"></div>
+              <div>
+                <div>Nuevo cliente registrado: <strong>Carlos Mendoza</strong></div>
+                <div class="meta">Hace 20 minutos · por Erix Salas</div>
+              </div>
+            </li>
+            <li>
+              <div class="activity-dot" style="background:#10b981"></div>
+              <div>
+                <div>Venta cerrada: <strong>Licencia Pro</strong> — $2,400</div>
+                <div class="meta">Hace 1 hora · por Laura Torres</div>
+              </div>
+            </li>
+            <li>
+              <div class="activity-dot" style="background:#f59e0b"></div>
+              <div>
+                <div>Tarea vencida: <strong>Seguimiento a Inversiones XYZ</strong></div>
+                <div class="meta">Hace 3 horas</div>
+              </div>
+            </li>
+            <li>
+              <div class="activity-dot" style="background:#6366f1"></div>
+              <div>
+                <div>Propuesta enviada a <strong>Grupo Horizonte</strong></div>
+                <div class="meta">Hoy, 9:15 am</div>
+              </div>
+            </li>
+            <li>
+              <div class="activity-dot" style="background:#10b981"></div>
+              <div>
+                <div>Cliente actualizado: <strong>Distribuidora Norte</strong></div>
+                <div class="meta">Ayer, 5:40 pm</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Pipeline -->
+        <div class="card">
+          <div class="card-title">Pipeline de ventas</div>
+          <div class="pipeline-bar">
+            <div class="pipeline-item">
+              <div class="label"><span>Prospecto</span><span>$18,400</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:80%;background:#6366f1"></div></div>
+            </div>
+            <div class="pipeline-item">
+              <div class="label"><span>Propuesta enviada</span><span>$12,900</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:55%;background:#8b5cf6"></div></div>
+            </div>
+            <div class="pipeline-item">
+              <div class="label"><span>Negociación</span><span>$9,700</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:40%;background:#f59e0b"></div></div>
+            </div>
+            <div class="pipeline-item">
+              <div class="label"><span>Cerrado ganado</span><span>$7,200</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:30%;background:#10b981"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CLIENTES ══ -->
+    <div class="tab-panel" id="tab-clientes">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div class="card-title" style="margin:0">124 clientes registrados</div>
+          <input type="text" placeholder="🔍  Buscar cliente..." style="padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.84rem;outline:none;width:220px">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Empresa</th>
+                <th>Teléfono</th>
+                <th>Estado</th>
+                <th>Valor total</th>
+                <th>Último contacto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><div class="client-cell"><div class="client-avatar" style="background:#6366f1">CM</div><div><div class="client-name">Carlos Mendoza</div><div class="client-email">carlos@mendoza.mx</div></div></div></td>
+                <td>Mendoza & Asociados</td>
+                <td>+52 55 1234 5678</td>
+                <td><span class="badge badge-success">Activo</span></td>
+                <td>$14,200</td>
+                <td>Hoy</td>
+              </tr>
+              <tr>
+                <td><div class="client-cell"><div class="client-avatar" style="background:#8b5cf6">LR</div><div><div class="client-name">Laura Ríos</div><div class="client-email">lrios@grupohorizonte.com</div></div></div></td>
+                <td>Grupo Horizonte</td>
+                <td>+52 33 9876 5432</td>
+                <td><span class="badge badge-warning">En seguimiento</span></td>
+                <td>$8,750</td>
+                <td>Hace 2 días</td>
+              </tr>
+              <tr>
+                <td><div class="client-cell"><div class="client-avatar" style="background:#10b981">PT</div><div><div class="client-name">Pablo Torres</div><div class="client-email">ptorres@inversiones.com</div></div></div></td>
+                <td>Inversiones XYZ</td>
+                <td>+52 81 5555 4444</td>
+                <td><span class="badge badge-success">Activo</span></td>
+                <td>$22,400</td>
+                <td>Ayer</td>
+              </tr>
+              <tr>
+                <td><div class="client-cell"><div class="client-avatar" style="background:#f59e0b">SV</div><div><div class="client-name">Sara Vargas</div><div class="client-email">svargas@norte.com</div></div></div></td>
+                <td>Distribuidora Norte</td>
+                <td>+52 55 2222 3333</td>
+                <td><span class="badge badge-muted">Inactivo</span></td>
+                <td>$3,100</td>
+                <td>Hace 30 días</td>
+              </tr>
+              <tr>
+                <td><div class="client-cell"><div class="client-avatar" style="background:#ef4444">MG</div><div><div class="client-name">Miguel García</div><div class="client-email">mgarcia@techsol.io</div></div></div></td>
+                <td>TechSolutions</td>
+                <td>+52 55 7777 8888</td>
+                <td><span class="badge badge-info">Prospecto</span></td>
+                <td>—</td>
+                <td>Hoy</td>
+              </tr>
+              <tr>
+                <td><div class="client-cell"><div class="client-avatar" style="background:#0ea5e9">AF</div><div><div class="client-name">Ana Flores</div><div class="client-email">aflores@comercial.mx</div></div></div></td>
+                <td>Comercial del Sur</td>
+                <td>+52 55 4444 5555</td>
+                <td><span class="badge badge-success">Activo</span></td>
+                <td>$11,600</td>
+                <td>Hace 5 días</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VENTAS (KANBAN) ══ -->
+    <div class="tab-panel" id="tab-ventas">
+      <div class="kanban">
+
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title" style="color:#6366f1">🔵 Prospectos</span>
+            <span class="kanban-count">4</span>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Licencia Empresarial</div>
+            <div class="deal-company">TechSolutions</div>
+            <div class="deal-footer">
+              <span class="deal-value">$5,000</span>
+              <span class="badge badge-info">Nuevo</span>
+            </div>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Consultoría anual</div>
+            <div class="deal-company">Comercial del Sur</div>
+            <div class="deal-footer">
+              <span class="deal-value">$3,200</span>
+              <span class="badge badge-info">Nuevo</span>
+            </div>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Soporte Premium</div>
+            <div class="deal-company">Inversiones XYZ</div>
+            <div class="deal-footer">
+              <span class="deal-value">$1,800</span>
+              <span class="badge badge-info">Nuevo</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title" style="color:#8b5cf6">💜 Propuesta</span>
+            <span class="kanban-count">3</span>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Pack Marketing Digital</div>
+            <div class="deal-company">Grupo Horizonte</div>
+            <div class="deal-footer">
+              <span class="deal-value">$7,400</span>
+              <span class="badge badge-warning">Pendiente</span>
+            </div>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Integración ERP</div>
+            <div class="deal-company">Mendoza & Asociados</div>
+            <div class="deal-footer">
+              <span class="deal-value">$12,000</span>
+              <span class="badge badge-warning">Pendiente</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title" style="color:#f59e0b">🟡 Negociación</span>
+            <span class="kanban-count">2</span>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Plataforma SaaS anual</div>
+            <div class="deal-company">Distribuidora Norte</div>
+            <div class="deal-footer">
+              <span class="deal-value">$9,600</span>
+              <span class="badge badge-warning">En revisión</span>
+            </div>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Módulo de reportes</div>
+            <div class="deal-company">Grupo Horizonte</div>
+            <div class="deal-footer">
+              <span class="deal-value">$4,200</span>
+              <span class="badge badge-warning">En revisión</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="kanban-col">
+          <div class="kanban-col-header">
+            <span class="kanban-col-title" style="color:#10b981">🟢 Cerrado</span>
+            <span class="kanban-count">5</span>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Licencia Pro</div>
+            <div class="deal-company">Inversiones XYZ</div>
+            <div class="deal-footer">
+              <span class="deal-value">$2,400</span>
+              <span class="badge badge-success">Ganado</span>
+            </div>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Capacitación equipo</div>
+            <div class="deal-company">TechSolutions</div>
+            <div class="deal-footer">
+              <span class="deal-value">$1,500</span>
+              <span class="badge badge-success">Ganado</span>
+            </div>
+          </div>
+          <div class="kanban-card">
+            <div class="deal-name">Setup inicial</div>
+            <div class="deal-company">Mendoza & Asociados</div>
+            <div class="deal-footer">
+              <span class="deal-value">$800</span>
+              <span class="badge badge-success">Ganado</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ TAREAS ══ -->
+    <div class="tab-panel" id="tab-tareas">
+      <div class="task-filters">
+        <button class="filter-btn active">Todas</button>
+        <button class="filter-btn">Hoy</button>
+        <button class="filter-btn">Pendientes</button>
+        <button class="filter-btn">Completadas</button>
+      </div>
+      <div class="task-list">
+        <div class="task-item">
+          <div class="task-check" onclick="toggleTask(this)"></div>
+          <div class="task-info">
+            <div class="task-title">Llamar a Carlos Mendoza para confirmar propuesta</div>
+            <div class="task-meta">📅 Hoy, 11:00 am · 👤 Mendoza & Asociados</div>
+          </div>
+          <span class="priority priority-alta">Alta</span>
+        </div>
+        <div class="task-item">
+          <div class="task-check" onclick="toggleTask(this)"></div>
+          <div class="task-info">
+            <div class="task-title">Enviar contrato actualizado a Grupo Horizonte</div>
+            <div class="task-meta">📅 Hoy, 2:00 pm · 👤 Laura Ríos</div>
+          </div>
+          <span class="priority priority-alta">Alta</span>
+        </div>
+        <div class="task-item">
+          <div class="task-check" onclick="toggleTask(this)"></div>
+          <div class="task-info">
+            <div class="task-title">Preparar demo para TechSolutions</div>
+            <div class="task-meta">📅 Mañana, 10:00 am · 👤 Miguel García</div>
+          </div>
+          <span class="priority priority-media">Media</span>
+        </div>
+        <div class="task-item">
+          <div class="task-check done" onclick="toggleTask(this)">✓</div>
+          <div class="task-info">
+            <div class="task-title done">Actualizar datos de Distribuidora Norte</div>
+            <div class="task-meta">📅 Completada ayer · 👤 Sara Vargas</div>
+          </div>
+          <span class="priority priority-baja">Baja</span>
+        </div>
+        <div class="task-item">
+          <div class="task-check" onclick="toggleTask(this)"></div>
+          <div class="task-info">
+            <div class="task-title">Seguimiento post-venta a Inversiones XYZ</div>
+            <div class="task-meta">📅 26 Jun · 👤 Pablo Torres</div>
+          </div>
+          <span class="priority priority-media">Media</span>
+        </div>
+        <div class="task-item">
+          <div class="task-check done" onclick="toggleTask(this)">✓</div>
+          <div class="task-info">
+            <div class="task-title done">Enviar factura a Comercial del Sur</div>
+            <div class="task-meta">📅 Completada · 👤 Ana Flores</div>
+          </div>
+          <span class="priority priority-baja">Baja</span>
+        </div>
+        <div class="task-item">
+          <div class="task-check" onclick="toggleTask(this)"></div>
+          <div class="task-info">
+            <div class="task-title">Revisar métricas de conversión del mes</div>
+            <div class="task-meta">📅 28 Jun · 👤 Equipo ventas</div>
+          </div>
+          <span class="priority priority-baja">Baja</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ REPORTES ══ -->
+    <div class="tab-panel" id="tab-reportes">
+
+      <div class="stat-row" style="margin-bottom:20px;margin-top:0">
+        <div class="stat-box">
+          <div class="num" style="color:#6366f1">$48,200</div>
+          <div class="lbl">Ingresos junio</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" style="color:#10b981">68%</div>
+          <div class="lbl">Tasa de cierre</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" style="color:#f59e0b">$1,302</div>
+          <div class="lbl">Ticket promedio</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" style="color:#ef4444">4.2 días</div>
+          <div class="lbl">Ciclo de venta</div>
+        </div>
+      </div>
+
+      <div class="report-grid">
+
+        <div class="card">
+          <div class="card-title">Ingresos por mes</div>
+          <div style="margin-top:12px">
+            <div class="bar-chart">
+              <div class="bar-col"><div class="b" style="height:60px;background:#6366f1"></div><span>Ene</span></div>
+              <div class="bar-col"><div class="b" style="height:80px;background:#6366f1"></div><span>Feb</span></div>
+              <div class="bar-col"><div class="b" style="height:55px;background:#6366f1"></div><span>Mar</span></div>
+              <div class="bar-col"><div class="b" style="height:100px;background:#6366f1"></div><span>Abr</span></div>
+              <div class="bar-col"><div class="b" style="height:75px;background:#6366f1"></div><span>May</span></div>
+              <div class="bar-col"><div class="b" style="height:120px;background:#4f46e5"></div><span>Jun</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Clientes por estado</div>
+          <div style="margin-top:16px" class="donut-wrap">
+            <svg class="donut" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e0e7ff" stroke-width="3.5"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#6366f1" stroke-width="3.5"
+                stroke-dasharray="54 46" stroke-dashoffset="25" stroke-linecap="round"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#10b981" stroke-width="3.5"
+                stroke-dasharray="28 72" stroke-dashoffset="-29" stroke-linecap="round"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f59e0b" stroke-width="3.5"
+                stroke-dasharray="13 87" stroke-dashoffset="-57" stroke-linecap="round"/>
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#ef4444" stroke-width="3.5"
+                stroke-dasharray="5 95" stroke-dashoffset="-70" stroke-linecap="round"/>
+            </svg>
+            <ul class="donut-legend">
+              <li><div class="dot" style="background:#6366f1"></div> Activos — 67 (54%)</li>
+              <li><div class="dot" style="background:#10b981"></div> Prospectos — 35 (28%)</li>
+              <li><div class="dot" style="background:#f59e0b"></div> Seguimiento — 16 (13%)</li>
+              <li><div class="dot" style="background:#ef4444"></div> Inactivos — 6 (5%)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Top clientes por valor</div>
+          <div class="table-wrap" style="margin-top:10px">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Cliente</th><th>Total</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>1</td><td>Inversiones XYZ</td><td><strong>$22,400</strong></td></tr>
+                <tr><td>2</td><td>Mendoza & Asociados</td><td><strong>$14,200</strong></td></tr>
+                <tr><td>3</td><td>Comercial del Sur</td><td><strong>$11,600</strong></td></tr>
+                <tr><td>4</td><td>Grupo Horizonte</td><td><strong>$8,750</strong></td></tr>
+                <tr><td>5</td><td>TechSolutions</td><td><strong>$3,100</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Conversión del pipeline</div>
+          <div style="margin-top:14px">
+            <div class="pipeline-item">
+              <div class="label"><span>Prospectos contactados</span><span>100%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:100%;background:#6366f1"></div></div>
+            </div>
+            <div class="pipeline-item">
+              <div class="label"><span>Propuesta enviada</span><span>72%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:72%;background:#8b5cf6"></div></div>
+            </div>
+            <div class="pipeline-item">
+              <div class="label"><span>En negociación</span><span>48%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:48%;background:#f59e0b"></div></div>
+            </div>
+            <div class="pipeline-item">
+              <div class="label"><span>Cerrado ganado</span><span>68%</span></div>
+              <div class="bar-track"><div class="bar-fill" style="width:68%;background:#10b981"></div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+  const tabs = {
+    dashboard: { title: 'Dashboard',  sub: 'Resumen general de tu negocio',    action: '+ Nuevo cliente' },
+    clientes:  { title: 'Clientes',   sub: 'Gestiona tus contactos y empresas', action: '+ Nuevo cliente' },
+    ventas:    { title: 'Ventas',     sub: 'Pipeline de oportunidades activas', action: '+ Nueva venta'   },
+    tareas:    { title: 'Tareas',     sub: 'Seguimiento de actividades',        action: '+ Nueva tarea'   },
+    reportes:  { title: 'Reportes',   sub: 'Métricas y análisis de rendimiento',action: 'Exportar PDF'    },
+  };
+
+  function goTab(name, el) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    el.classList.add('active');
+    document.getElementById('page-title').textContent = tabs[name].title;
+    document.getElementById('page-sub').textContent   = tabs[name].sub;
+    document.getElementById('main-action').textContent = tabs[name].action;
+  }
+
+  function handleAction() {
+    const t = document.getElementById('page-title').textContent;
+    alert('Función "' + document.getElementById('main-action').textContent + '" — próximamente en ' + t + '.');
+  }
+
+  function toggleTask(el) {
+    const isDone = el.classList.toggle('done');
+    el.textContent = isDone ? '✓' : '';
+    const title = el.closest('.task-item').querySelector('.task-title');
+    title.classList.toggle('done', isDone);
+  }
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+</script>
 </body>
 </html>
