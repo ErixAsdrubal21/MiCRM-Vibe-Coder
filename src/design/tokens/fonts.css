@@ -1,0 +1,9 @@
+/**
+ * Fonts — Mi Negocio CRM
+ * Inter vía Google Fonts CDN. En entornos con CSP que bloquea CDNs de
+ * fuentes (p. ej. artifacts), usar el stack system-ui de --font-ui en
+ * typography.css como sustituto — no es una degradación silenciosa, es
+ * visualmente muy cercano a Inter y así se documenta en design.md.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");

@@ -1,0 +1,177 @@
+/**
+ * Colors — Mi Negocio CRM
+ * Reference lock: ver ../design.md. Acento único marigold reservado a CTA
+ * (Zapier + Nintendo + Pinterest). Etapas de pipeline y prioridad tienen
+ * hues fijos, distintos del acento — nunca reutilizar --color-accent-* para
+ * estado, ni un --color-stage-* o --color-priority-* para un CTA.
+ */
+
+:root {
+  /* Canvas / superficie — la diferencia crema→blanco ES la elevación (Pinterest) */
+  --color-canvas: #FBF7F1;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #F3EEE6;
+  --color-surface-container-high: #EDE6D9;
+  --color-hairline: #E7E0D3;
+
+  /* Texto */
+  --color-ink: #221C16;
+  --color-body: #5C564C;
+  --color-mute: #948C7E;
+  --color-inverse-surface: #362E24;
+  --color-inverse-on-surface: #FBF3E7;
+
+  /* Acento — CTA-only (Zapier: "reserva el color saturado para cada CTA primario") */
+  --color-accent: #E2680C;
+  --color-accent-pressed: #C2560A;
+  --color-accent-tint: #FBE4CE;
+  --color-on-accent: #FFFFFF;
+
+  /* Semántico — separado del acento (nunca es el mismo hue que --color-accent) */
+  --color-critical: #B23A2E;
+  --color-critical-tint: #F7DCD6;
+  --color-success: #2F7D5C;
+  --color-success-tint: #DCEFE4;
+  --color-focus-ring: #2F6FE0;
+
+  /* Etapas de pipeline — 6 fijas, siempre texto/ícono a color sobre fondo tint,
+     nunca fondo sólido saturado (regla heredada de la versión anterior del sistema) */
+  --color-stage-nuevo: #5B6B7A;
+  --color-stage-nuevo-tint: #E4E9EC;
+  --color-stage-contactado: #3E6E8E;
+  --color-stage-contactado-tint: #DCE8EE;
+  --color-stage-cotizacion: #8A6D3B;
+  --color-stage-cotizacion-tint: #F1E7D3;
+  --color-stage-negociacion: #6D4C9C;
+  --color-stage-negociacion-tint: #EAE1F5;
+  --color-stage-ganado: #2F7D5C; /* = --color-success */
+  --color-stage-ganado-tint: #DCEFE4;
+  --color-stage-perdido: #8A8377;
+  --color-stage-perdido-tint: #EDEAE2;
+
+  /* Prioridad (pendiente de confirmación de producto — ver Caveats en design.md).
+     priority-alta reutiliza --color-critical a propósito: para Carlos, una
+     prioridad alta y un riesgo activo son la misma urgencia. */
+  --color-priority-alta: #B23A2E;
+  --color-priority-media: #C79A3B;
+  --color-priority-baja: #948C7E;
+
+  color-scheme: light;
+}
+
+/* Preferencia de SO — se puede sobreescribir en ambas direcciones con data-theme (ver bloques abajo) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-canvas: #17130F;
+    --color-surface: #221C16;
+    --color-surface-sunken: #1D1712;
+    --color-surface-container-high: #29221A;
+    --color-hairline: #362E24;
+    --color-ink: #F4EFE6;
+    --color-body: #C9C0B2;
+    --color-mute: #8B8376;
+    --color-inverse-surface: #F4EFE6;
+    --color-inverse-on-surface: #221C16;
+    --color-accent: #F3812A;
+    --color-accent-pressed: #FF9A4D;
+    --color-accent-tint: #402A15;
+    --color-on-accent: #1D1208;
+    --color-critical: #E2685A;
+    --color-critical-tint: #3D211D;
+    --color-success: #4FAE84;
+    --color-success-tint: #17332A;
+    --color-focus-ring: #6C97F5;
+    --color-stage-nuevo: #8FA3B4;
+    --color-stage-nuevo-tint: #26333D;
+    --color-stage-contactado: #7FB0CE;
+    --color-stage-contactado-tint: #1E2E38;
+    --color-stage-cotizacion: #D3A968;
+    --color-stage-cotizacion-tint: #3A2E1B;
+    --color-stage-negociacion: #B79AE0;
+    --color-stage-negociacion-tint: #2E2440;
+    --color-stage-ganado: #4FAE84;
+    --color-stage-ganado-tint: #17332A;
+    --color-stage-perdido: #A39C8E;
+    --color-stage-perdido-tint: #2C2820;
+    --color-priority-alta: #E2685A;
+    --color-priority-media: #D9AE5C;
+    --color-priority-baja: #8B8376;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-canvas: #17130F;
+  --color-surface: #221C16;
+  --color-surface-sunken: #1D1712;
+  --color-surface-container-high: #29221A;
+  --color-hairline: #362E24;
+  --color-ink: #F4EFE6;
+  --color-body: #C9C0B2;
+  --color-mute: #8B8376;
+  --color-inverse-surface: #F4EFE6;
+  --color-inverse-on-surface: #221C16;
+  --color-accent: #F3812A;
+  --color-accent-pressed: #FF9A4D;
+  --color-accent-tint: #402A15;
+  --color-on-accent: #1D1208;
+  --color-critical: #E2685A;
+  --color-critical-tint: #3D211D;
+  --color-success: #4FAE84;
+  --color-success-tint: #17332A;
+  --color-focus-ring: #6C97F5;
+  --color-stage-nuevo: #8FA3B4;
+  --color-stage-nuevo-tint: #26333D;
+  --color-stage-contactado: #7FB0CE;
+  --color-stage-contactado-tint: #1E2E38;
+  --color-stage-cotizacion: #D3A968;
+  --color-stage-cotizacion-tint: #3A2E1B;
+  --color-stage-negociacion: #B79AE0;
+  --color-stage-negociacion-tint: #2E2440;
+  --color-stage-ganado: #4FAE84;
+  --color-stage-ganado-tint: #17332A;
+  --color-stage-perdido: #A39C8E;
+  --color-stage-perdido-tint: #2C2820;
+  --color-priority-alta: #E2685A;
+  --color-priority-media: #D9AE5C;
+  --color-priority-baja: #8B8376;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --color-canvas: #FBF7F1;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #F3EEE6;
+  --color-surface-container-high: #EDE6D9;
+  --color-hairline: #E7E0D3;
+  --color-ink: #221C16;
+  --color-body: #5C564C;
+  --color-mute: #948C7E;
+  --color-inverse-surface: #362E24;
+  --color-inverse-on-surface: #FBF3E7;
+  --color-accent: #E2680C;
+  --color-accent-pressed: #C2560A;
+  --color-accent-tint: #FBE4CE;
+  --color-on-accent: #FFFFFF;
+  --color-critical: #B23A2E;
+  --color-critical-tint: #F7DCD6;
+  --color-success: #2F7D5C;
+  --color-success-tint: #DCEFE4;
+  --color-focus-ring: #2F6FE0;
+  --color-stage-nuevo: #5B6B7A;
+  --color-stage-nuevo-tint: #E4E9EC;
+  --color-stage-contactado: #3E6E8E;
+  --color-stage-contactado-tint: #DCE8EE;
+  --color-stage-cotizacion: #8A6D3B;
+  --color-stage-cotizacion-tint: #F1E7D3;
+  --color-stage-negociacion: #6D4C9C;
+  --color-stage-negociacion-tint: #EAE1F5;
+  --color-stage-ganado: #2F7D5C;
+  --color-stage-ganado-tint: #DCEFE4;
+  --color-stage-perdido: #8A8377;
+  --color-stage-perdido-tint: #EDEAE2;
+  --color-priority-alta: #B23A2E;
+  --color-priority-media: #C79A3B;
+  --color-priority-baja: #948C7E;
+  color-scheme: light;
+}

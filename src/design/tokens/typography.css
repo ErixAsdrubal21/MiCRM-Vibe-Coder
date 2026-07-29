@@ -1,0 +1,97 @@
+/**
+ * Typography — Mi Negocio CRM
+ * Una sola familia UI (Inter). Este CRM utilitario no necesita una segunda
+ * voz de "marketing" como Degular Display (Zapier) o Pin Sans (Pinterest) —
+ * el único registro que "grita" es --type-kpi-display, para los números
+ * del dashboard de Marta. Ver ../design.md para el razonamiento completo.
+ */
+
+:root {
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Números KPI del dashboard — único lugar con peso 800 + tracking negativo */
+  --type-kpi-display-size: 28px;
+  --type-kpi-display-weight: 800;
+  --type-kpi-display-line: 32px;
+  --type-kpi-display-tracking: -0.02em;
+
+  /* Título de pantalla ("Hola, Carlos" / "Hola, Marta") */
+  --type-headline-screen-size: 21px;
+  --type-headline-screen-weight: 700;
+  --type-headline-screen-line: 26px;
+  --type-headline-screen-tracking: -0.01em;
+
+  /* Título de sección / nombre de prospecto en tarjeta */
+  --type-headline-section-size: 16px;
+  --type-headline-section-weight: 700;
+  --type-headline-section-line: 22px;
+
+  /* Cuerpo destacado (nombre de negocio, texto de fila) */
+  --type-body-lg-size: 15px;
+  --type-body-lg-weight: 500;
+  --type-body-lg-line: 22px;
+
+  /* Cuerpo por defecto */
+  --type-body-md-size: 13.5px;
+  --type-body-md-weight: 400;
+  --type-body-md-line: 20px;
+
+  /* Metadata (días sin contacto, fecha de seguimiento) */
+  --type-label-meta-size: 12px;
+  --type-label-meta-weight: 600;
+  --type-label-meta-line: 16px;
+
+  /* Badges / etiquetas uppercase (etapa, prioridad) */
+  --type-label-caps-size: 11px;
+  --type-label-caps-weight: 700;
+  --type-label-caps-line: 14px;
+  --type-label-caps-tracking: 0.05em;
+}
+
+.type-kpi-display {
+  font-family: var(--font-ui);
+  font-size: var(--type-kpi-display-size);
+  font-weight: var(--type-kpi-display-weight);
+  line-height: var(--type-kpi-display-line);
+  letter-spacing: var(--type-kpi-display-tracking);
+  font-variant-numeric: tabular-nums;
+}
+.type-headline-screen {
+  font-family: var(--font-ui);
+  font-size: var(--type-headline-screen-size);
+  font-weight: var(--type-headline-screen-weight);
+  line-height: var(--type-headline-screen-line);
+  letter-spacing: var(--type-headline-screen-tracking);
+}
+.type-headline-section {
+  font-family: var(--font-ui);
+  font-size: var(--type-headline-section-size);
+  font-weight: var(--type-headline-section-weight);
+  line-height: var(--type-headline-section-line);
+}
+.type-body-lg {
+  font-family: var(--font-ui);
+  font-size: var(--type-body-lg-size);
+  font-weight: var(--type-body-lg-weight);
+  line-height: var(--type-body-lg-line);
+}
+.type-body-md {
+  font-family: var(--font-ui);
+  font-size: var(--type-body-md-size);
+  font-weight: var(--type-body-md-weight);
+  line-height: var(--type-body-md-line);
+}
+.type-label-meta {
+  font-family: var(--font-ui);
+  font-size: var(--type-label-meta-size);
+  font-weight: var(--type-label-meta-weight);
+  line-height: var(--type-label-meta-line);
+}
+.type-label-caps {
+  font-family: var(--font-ui);
+  font-size: var(--type-label-caps-size);
+  font-weight: var(--type-label-caps-weight);
+  line-height: var(--type-label-caps-line);
+  letter-spacing: var(--type-label-caps-tracking);
+  text-transform: uppercase;
+}

@@ -1,0 +1,25 @@
+/**
+ * Spacing — Mi Negocio CRM
+ * Grid de 8px con ajuste fino de 4px. Sin cambios frente a la versión
+ * anterior del sistema: las tres referencias (Zapier, Nintendo, Pinterest)
+ * coinciden en base 8px, así que no había conflicto que resolver aquí.
+ * Se descarta explícitamente el ritmo de 48-64px de secciones de marketing
+ * de Zapier/Pinterest — este es un dashboard denso, no una landing page.
+ */
+
+:root {
+  --space-fine: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 20px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* Alias semánticos usados en componentes */
+  --space-stack-sm: var(--space-xs);   /* 8px entre filas de lista */
+  --space-stack-md: var(--space-sm);   /* 12px entre bloques KPI */
+  --space-section-gap: var(--space-lg); /* 20px entre secciones de pantalla */
+  --space-margin-mobile: var(--space-md);  /* 16px márgenes de pantalla en mobile */
+  --space-margin-desktop: var(--space-xl); /* 24px márgenes de pantalla en desktop */
+}

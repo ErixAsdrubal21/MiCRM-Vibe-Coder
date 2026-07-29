@@ -1,0 +1,12 @@
+/**
+ * Mi Negocio CRM — punto de entrada global.
+ * Solo @imports, en orden de dependencia: fuentes → tokens → reset.
+ * Ver design.md para el reference lock y el razonamiento de cada valor.
+ */
+
+@import url("./tokens/fonts.css");
+@import url("./tokens/colors.css");
+@import url("./tokens/typography.css");
+@import url("./tokens/spacing.css");
+@import url("./tokens/radius-elevation.css");
+@import url("./tokens/base.css");

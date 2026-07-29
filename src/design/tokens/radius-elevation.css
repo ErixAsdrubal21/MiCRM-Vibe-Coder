@@ -1,0 +1,38 @@
+/**
+ * Radius & Elevation — Mi Negocio CRM
+ *
+ * Radio: exactamente 3 valores (disciplina de Pinterest: "el sistema nunca
+ * introduce un tercer valor entre md y lg" — aquí no hay valor entre sm y
+ * md, y no hay nada más grande que md salvo el pill). Reemplaza el sistema
+ * de 5 valores (sm/md/lg/xl/pill) de la versión anterior.
+ *
+ * Elevación: plana por default — el contraste de superficie (canvas crema vs.
+ * surface blanco) ES la elevación, no la sombra (regla explícita de
+ * Pinterest). Sombra real solo en 2 lugares: el FAB y las hojas/modales.
+ * Se descarta por completo el lenguaje de bisel/cromo de Nintendo.
+ */
+
+:root {
+  --radius-sm: 8px;   /* chips, inputs, PriorityFlag */
+  --radius-md: 16px;  /* botones, tarjetas, KpiTile, modales */
+  --radius-pill: 9999px; /* acciones de contacto, badges de etapa, búsqueda, avatar */
+
+  --shadow-none: none;
+  --shadow-fab: 0 10px 24px rgba(34, 28, 22, 0.20);
+  --shadow-sheet: 0 -8px 30px rgba(34, 28, 22, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shadow-fab: 0 10px 24px rgba(0, 0, 0, 0.5);
+    --shadow-sheet: 0 -8px 30px rgba(0, 0, 0, 0.45);
+  }
+}
+:root[data-theme="dark"] {
+  --shadow-fab: 0 10px 24px rgba(0, 0, 0, 0.5);
+  --shadow-sheet: 0 -8px 30px rgba(0, 0, 0, 0.45);
+}
+:root[data-theme="light"] {
+  --shadow-fab: 0 10px 24px rgba(34, 28, 22, 0.20);
+  --shadow-sheet: 0 -8px 30px rgba(34, 28, 22, 0.18);
+}

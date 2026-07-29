@@ -1,0 +1,172 @@
+/**
+ * Component styles — Mi Negocio CRM
+ * Consumido por todos los .jsx en components/core/. Depende de los tokens
+ * en ../../tokens/ (import ../../styles.css antes que este archivo).
+ */
+
+/* ---------- Icon ---------- */
+.mn-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  color: currentColor;
+  flex: none;
+}
+.mn-icon svg { width: 100%; height: 100%; stroke: currentColor; stroke-width: 1.75; }
+
+/* ---------- Button ---------- */
+.mn-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-fine);
+  height: 44px;
+  padding: 0 var(--space-md);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--type-body-lg-size);
+  font-weight: 600;
+  transition: background-color 100ms ease, transform 80ms ease;
+}
+.mn-button:active { transform: scale(0.98); }
+.mn-button--primary { background: var(--color-accent); color: var(--color-on-accent); }
+.mn-button--primary:hover { background: var(--color-accent-pressed); }
+.mn-button--secondary { background: var(--color-surface-sunken); color: var(--color-ink); }
+.mn-button--secondary:hover { background: var(--color-surface-container-high); }
+.mn-button--ghost { background: transparent; color: var(--color-ink); }
+.mn-button--ghost:hover { background: var(--color-surface-sunken); }
+.mn-button--danger { background: var(--color-critical); color: #fff; }
+.mn-button--danger:hover { filter: brightness(0.92); }
+.mn-button--full { width: 100%; }
+.mn-button--pill { border-radius: var(--radius-pill); }
+
+/* ---------- IconButton ---------- */
+.mn-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+  transition: background-color 100ms ease, transform 80ms ease;
+}
+.mn-icon-button:hover { background: var(--color-surface-container-high); }
+.mn-icon-button:active { transform: scale(0.98); }
+.mn-icon-button--outline { background: transparent; border-color: var(--color-hairline); }
+
+/* ---------- Badge (etapa de pipeline) ---------- */
+.mn-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.mn-badge--nuevo        { background: var(--color-stage-nuevo-tint);        color: var(--color-stage-nuevo); }
+.mn-badge--contactado   { background: var(--color-stage-contactado-tint);   color: var(--color-stage-contactado); }
+.mn-badge--cotizacion   { background: var(--color-stage-cotizacion-tint);   color: var(--color-stage-cotizacion); }
+.mn-badge--negociacion  { background: var(--color-stage-negociacion-tint);  color: var(--color-stage-negociacion); }
+.mn-badge--ganado       { background: var(--color-stage-ganado-tint);       color: var(--color-stage-ganado); }
+.mn-badge--perdido      { background: var(--color-stage-perdido-tint);      color: var(--color-stage-perdido); }
+
+/* ---------- Tag (metadata inline) ---------- */
+.mn-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+}
+.mn-tag .mn-icon { width: 13px; height: 13px; }
+.mn-tag--risk    { background: var(--color-critical-tint); color: var(--color-critical); }
+.mn-tag--success { background: var(--color-success-tint);  color: var(--color-success); }
+.mn-tag--neutral { background: var(--color-surface-sunken); color: var(--color-mute); }
+.mn-tag--risk::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-critical);
+}
+
+/* ---------- PriorityFlag (nuevo) ----------
+ * Forma deliberadamente distinta a Badge: radius-sm (no pill), fondo
+ * surface con borde hairline, punto de color en vez de texto-a-color-sobre-tint.
+ * No debe confundirse visualmente con un Badge de etapa. */
+.mn-priority-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.mn-priority-flag__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.mn-priority-flag--alta  .mn-priority-flag__dot { background: var(--color-priority-alta); }
+.mn-priority-flag--media .mn-priority-flag__dot { background: var(--color-priority-media); }
+.mn-priority-flag--baja  .mn-priority-flag__dot { background: var(--color-priority-baja); }
+/* Variante compacta: sin fondo/borde, para usarla dentro de ProspectCard junto al risk tag */
+.mn-priority-flag--inline { background: transparent; border-color: transparent; padding: 3px 8px 3px 6px; }
+
+/* ---------- Input ---------- */
+.mn-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-fine);
+  height: 44px;
+  padding: 0 var(--space-sm);
+  background: var(--color-surface-sunken);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--type-body-md-size);
+  color: var(--color-ink);
+  width: 100%;
+}
+.mn-input::placeholder { color: var(--color-mute); }
+.mn-input:focus-within { border-color: var(--color-focus-ring); }
+.mn-input--field { border-radius: var(--radius-sm); background: var(--color-surface); border-color: var(--color-hairline); }
+
+/* ---------- ProspectCard ---------- */
+.mn-prospect-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-sm) var(--space-xs);
+}
+.mn-prospect-card__top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-xs); }
+.mn-prospect-card__name { margin: 0; font-family: var(--font-ui); font-size: var(--type-headline-section-size); font-weight: var(--type-headline-section-weight); color: var(--color-ink); }
+.mn-prospect-card__biz { margin: 1px 0 0; font-family: var(--font-ui); font-size: 12.5px; color: var(--color-mute); }
+.mn-prospect-card__meta { display: flex; align-items: center; gap: var(--space-fine); flex-wrap: wrap; }
+.mn-prospect-card__meta-text { font-size: 11.5px; color: var(--color-mute); font-weight: 600; }
+.mn-prospect-card__actions { display: flex; gap: var(--space-fine); margin-top: 2px; }
+.mn-prospect-card__actions .mn-button { flex: 1; border-radius: var(--radius-pill); height: 38px; font-size: 12.5px; }
+
+/* ---------- KpiTile (nuevo) ---------- */
+.mn-kpi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+}
+.mn-kpi-tile--warn { background: var(--color-critical-tint); }
+.mn-kpi-tile__num { font-family: var(--font-ui); font-size: var(--type-kpi-display-size); font-weight: var(--type-kpi-display-weight); letter-spacing: var(--type-kpi-display-tracking); line-height: var(--type-kpi-display-line); font-variant-numeric: tabular-nums; color: var(--color-ink); }
+.mn-kpi-tile--warn .mn-kpi-tile__num { color: var(--color-critical); }
+.mn-kpi-tile__label { font-family: var(--font-ui); font-size: 11.5px; font-weight: 600; color: var(--color-mute); }
+.mn-kpi-tile--warn .mn-kpi-tile__label { color: var(--color-critical); opacity: 0.85; }

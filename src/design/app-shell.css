@@ -1,0 +1,145 @@
+/**
+ * App shell — chrome real de la app (no la maqueta de teléfono de Stitch).
+ * Reusa el vocabulario visual de ui_kits/crm/shell.css (top-bar, nav-item,
+ * fab, list-row, divider) pero para viewport completo, con nav lateral en
+ * desktop en vez del bottom-nav fijo de móvil.
+ */
+
+.app-shell {
+  min-height: 100vh;
+  background: var(--color-canvas);
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell__content {
+  flex: 1;
+  padding: 4px 16px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.top-bar {
+  flex: none;
+  padding: 18px 16px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+.top-bar__title { font-family: var(--font-ui); font-size: 21px; font-weight: 700; letter-spacing: -0.01em; margin: 0; color: var(--color-ink); }
+.top-bar__sub { font-family: var(--font-ui); font-size: 13px; color: var(--color-mute); margin: 3px 0 0; }
+
+.fab {
+  position: fixed;
+  right: 24px;
+  bottom: 88px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(34,28,22,0.20);
+  border: none;
+  z-index: 20;
+}
+.fab:hover { background: var(--color-accent-pressed); }
+
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  flex: none;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-hairline);
+  z-index: 10;
+}
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-mute);
+  background: none;
+  border: none;
+  padding: 4px 10px;
+}
+.nav-item .mn-icon { width: 20px; height: 20px; }
+.nav-item.active { color: var(--color-accent); }
+
+.section-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-mute);
+  margin: 6px 2px 0;
+}
+
+.divider { height: 1px; background: var(--color-hairline); border: none; margin: 4px 0; }
+
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.list-row__title { font-family: var(--font-ui); font-size: 13.5px; font-weight: 600; color: var(--color-ink); margin: 0; }
+.list-row__meta { font-family: var(--font-ui); font-size: 11.5px; color: var(--color-mute); margin: 2px 0 0; }
+
+/* Desktop: nav lateral fija en vez de bottom-nav, sin FAB flotante encimado */
+@media (min-width: 900px) {
+  .app-shell { flex-direction: row; }
+
+  .bottom-nav {
+    position: sticky;
+    top: 0;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    width: 220px;
+    height: 100vh;
+    padding: 24px 12px;
+    border-top: none;
+    border-right: 1px solid var(--color-hairline);
+    gap: 4px;
+  }
+  .nav-item {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    font-size: 13.5px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+  }
+  .nav-item.active { background: var(--color-accent-tint); }
+
+  .app-shell__content { padding: 4px 32px 48px; max-width: 720px; }
+  .top-bar { padding: 24px 32px 14px; max-width: 720px; }
+
+  .fab { right: 40px; bottom: 40px; }
+}
