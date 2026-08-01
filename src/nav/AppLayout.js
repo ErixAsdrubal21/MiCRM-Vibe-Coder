@@ -21,6 +21,9 @@ export default function AppLayout({ children }) {
   const router = useRouter();
 
   useEffect(() => {
+    // localStorage no existe en SSR; se lee después del montaje a propósito
+    // para que el primer render de cliente coincida con el del servidor.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSessionState(getSession());
   }, []);
 

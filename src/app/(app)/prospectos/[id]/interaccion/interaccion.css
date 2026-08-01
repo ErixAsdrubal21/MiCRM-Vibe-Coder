@@ -1,0 +1,20 @@
+.contact-type-row { display: flex; gap: 8px; }
+.contact-type-chip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  border: 1px solid transparent;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.contact-type-chip.selected { background: var(--color-accent-tint); color: var(--color-accent-pressed); border-color: var(--color-accent); }
+
+.next-follow-card { background: var(--color-surface); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.next-follow-card__title { font-family: var(--font-ui); font-size: 12.5px; font-weight: 700; color: var(--color-ink); margin: 0; }
