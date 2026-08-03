@@ -154,18 +154,29 @@ export default function FichaProspecto() {
         </div>
       )}
 
-      <div className="next-follow">
-        <span style={{ color: "var(--color-accent-pressed)", display: "inline-flex" }}>
-          <Icon name="calendar-clock" size={18} />
-        </span>
-        <span className="next-follow__txt">
-          {prospect.nextFollowUp ? (
-            <>Próximo seguimiento: <b>{relativeFollowUpLabel(prospect.nextFollowUp.at)} · {contactTypeLabel(prospect.nextFollowUp.type)}</b></>
-          ) : (
-            <>Sin seguimiento programado</>
-          )}
-        </span>
-      </div>
+      {prospect.stage === "ganado" && prospect.sale ? (
+        <div className="next-follow">
+          <span style={{ color: "var(--color-accent-pressed)", display: "inline-flex" }}>
+            <Icon name="dollar-sign" size={18} />
+          </span>
+          <span className="next-follow__txt">
+            Vendido: <b>${prospect.sale.amount.toLocaleString("es-MX")} · {prospect.sale.product}</b>
+          </span>
+        </div>
+      ) : (
+        <div className="next-follow">
+          <span style={{ color: "var(--color-accent-pressed)", display: "inline-flex" }}>
+            <Icon name="calendar-clock" size={18} />
+          </span>
+          <span className="next-follow__txt">
+            {prospect.nextFollowUp ? (
+              <>Próximo seguimiento: <b>{relativeFollowUpLabel(prospect.nextFollowUp.at)} · {contactTypeLabel(prospect.nextFollowUp.type)}</b></>
+            ) : (
+              <>Sin seguimiento programado</>
+            )}
+          </span>
+        </div>
+      )}
 
       <p className="section-label">Historial de interacciones</p>
       {sortedInteractions(prospect.interactions).length === 0 ? (

@@ -2,7 +2,7 @@
 
 CRM para pequeños negocios (ver PRD en Notion / proyecto `crm-mvp` en Linear, equipo ICSAAB). Este repo es la versión Next.js + Convex, separada de `~/mi-crm` (la versión Vite/React con datos mock, usada como referencia de estilo y de comportamiento al portar cada pantalla).
 
-**Estado actual:** Login + navegación por rol (ICS-9/10) y gestión de prospectos y venta/seguimiento completas (ICS-11 a ICS-19: Lista, Nuevo prospecto, Ficha, Registrar interacción, Pipeline, Tareas del día), con backend real en Convex — permisos por rol e invariantes de negocio (lossReason obligatorio, próximo seguimiento obligatorio, máximo un seguimiento pendiente por prospecto) validados del lado del servidor, no solo ocultos en la UI. Milestones 4 y 5 (venta cerrada, dashboard/reportes de Marta) todavía no están construidos.
+**Estado actual:** Login + navegación por rol (ICS-9/10), gestión de prospectos y venta/seguimiento (ICS-11 a ICS-19) y productividad diaria de Carlos (ICS-20 a ICS-22: alerta de riesgo en la Lista, registro de venta cerrada, "Mi desempeño"), con backend real en Convex — permisos por rol e invariantes de negocio (lossReason/monto+producto obligatorios según etapa, próximo seguimiento obligatorio, máximo un seguimiento pendiente por prospecto) validados del lado del servidor, no solo ocultos en la UI. Milestones 5 y 6 (dashboard/reportes de Marta, configuración) todavía no están construidos.
 
 ## Stack
 
@@ -37,9 +37,10 @@ convex/
   schema.js           # Tablas: users, prospects, interactions, followUps, sales
   permissions.js       # requireUser/requireVendedor/requireProspect — guardia de rol
   lib.js               # helpers compartidos (isActiveStage, lastContactAt, pendingFollowUp, daysSince)
-  prospects.js          # list/pipeline/get/create/update/changeStage
+  prospects.js          # list/pipeline/get/create/update/changeStage (incl. venta cerrada, ICS-21)
   interactions.js       # add (ICS-15/16)
   followUps.js          # today/complete (ICS-19)
+  metrics.js             # myPerformance (ICS-22)
   users.js               # loginMock (ICS-9)
 src/
   app/

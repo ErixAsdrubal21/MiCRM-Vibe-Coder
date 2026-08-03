@@ -48,7 +48,7 @@ export const pipeline = query({
   handler: async (ctx) => ctx.db.query("prospects").collect(),
 });
 
-/** ICS-12 Ficha: un prospecto + sus interactions + su followUp pendiente. */
+/** ICS-12 Ficha: un prospecto + sus interactions + su followUp pendiente + su venta (si está Ganado). */
 export const get = query({
   args: { id: v.id("prospects") },
   handler: async (ctx, { id }) => {
@@ -59,7 +59,11 @@ export const get = query({
       .withIndex("by_prospect", (q) => q.eq("prospectId", id))
       .collect();
     const nextFollowUp = await pendingFollowUp(ctx, id);
-    return { ...prospect, interactions, nextFollowUp };
+    const sale =
+      prospect.stage === "ganado"
+        ? await ctx.db.query("sales").withIndex("by_prospect", (q) => q.eq("prospectId", id)).first()
+        : null;
+    return { ...prospect, interactions, nextFollowUp, sale };
   },
 });
 
@@ -105,25 +109,54 @@ export const update = mutation({
   },
 });
 
-/** ICS-14/17: cambio de etapa. "perdido" exige lossReason; salir de "perdido" lo limpia. */
+/**
+ * ICS-14/17/21: cambio de etapa. "perdido" exige lossReason; salir de
+ * "perdido" lo limpia. "ganado" exige amount+product.
+ *
+ * Invariante de venta: a lo más una fila de `sales` por prospecto, y existe
+ * si y solo si el prospecto está actualmente en "ganado". Entrar a "ganado"
+ * hace upsert (si ya había una venta previa para este prospecto — porque se
+ * salió y volvió a entrar — se actualiza en vez de duplicarla); salir de
+ * "ganado" hacia cualquier otra etapa borra la venta, porque deja de ser
+ * cierto que el prospecto está vendido. Sin esto, un ciclo
+ * ganado → otra etapa → ganado generaba una fila de `sales` por cada vuelta,
+ * inflando conteos en Ficha/Mi desempeño.
+ */
 export const changeStage = mutation({
   args: {
     actorId: v.id("users"),
     id: v.id("prospects"),
     stage,
     lossReason: v.optional(lossReason),
+    amount: v.optional(v.number()),
+    product: v.optional(v.string()),
   },
-  handler: async (ctx, { actorId, id, stage: newStage, lossReason: reason }) => {
+  handler: async (ctx, { actorId, id, stage: newStage, lossReason: reason, amount, product }) => {
     await requireVendedor(ctx, actorId);
     await requireProspect(ctx, id);
     if (newStage === "perdido" && !reason) {
       throw new Error("Selecciona un motivo antes de marcar como perdido (ICS-17).");
+    }
+    if (newStage === "ganado" && (!amount || amount <= 0 || !product?.trim())) {
+      throw new Error("Registra el monto y el producto/servicio vendido antes de marcar como ganado (ICS-21).");
     }
     await ctx.db.patch(id, {
       stage: newStage,
       stageChangedAt: Date.now(),
       lossReason: newStage === "perdido" ? reason : undefined,
     });
+
+    const existingSale = await ctx.db.query("sales").withIndex("by_prospect", (q) => q.eq("prospectId", id)).first();
+    if (newStage === "ganado") {
+      const saleFields = { prospectId: id, amount, product: product.trim(), closedAt: Date.now(), closedBy: actorId };
+      if (existingSale) {
+        await ctx.db.patch(existingSale._id, saleFields);
+      } else {
+        await ctx.db.insert("sales", saleFields);
+      }
+    } else if (existingSale) {
+      await ctx.db.delete(existingSale._id);
+    }
     return ctx.db.get(id);
   },
 });

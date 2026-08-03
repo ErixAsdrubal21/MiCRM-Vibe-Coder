@@ -11,6 +11,7 @@
 import type * as followUps from "../followUps.js";
 import type * as interactions from "../interactions.js";
 import type * as lib from "../lib.js";
+import type * as metrics from "../metrics.js";
 import type * as permissions from "../permissions.js";
 import type * as prospects from "../prospects.js";
 import type * as users from "../users.js";
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   followUps: typeof followUps;
   interactions: typeof interactions;
   lib: typeof lib;
+  metrics: typeof metrics;
   permissions: typeof permissions;
   prospects: typeof prospects;
   users: typeof users;

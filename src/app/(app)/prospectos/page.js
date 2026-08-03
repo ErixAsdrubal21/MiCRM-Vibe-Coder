@@ -7,7 +7,8 @@ import { api } from "../../../../convex/_generated/api";
 import TopBar from "@/nav/TopBar.js";
 import { Icon } from "@/design/components/core/Icon.jsx";
 import { Badge } from "@/design/components/core/Badge.jsx";
-import { contactMetaLabel, STAGES } from "@/lib/prospects.js";
+import { Tag } from "@/design/components/core/Tag.jsx";
+import { contactMetaLabel, daysSinceContact, isActiveStage, STAGES } from "@/lib/prospects.js";
 
 const STAGE_LABELS = {
   nuevo: "Nuevo",
@@ -78,7 +79,11 @@ export default function ProspectosList() {
         >
           <div>
             <p className="list-row__title">{p.name}</p>
-            <p className="list-row__meta">{contactMetaLabel(p)}</p>
+            {isActiveStage(p.stage) && daysSinceContact(p) > 3 ? (
+              <Tag variant="risk" icon="alert-triangle">{contactMetaLabel(p)}</Tag>
+            ) : (
+              <p className="list-row__meta">{contactMetaLabel(p)}</p>
+            )}
           </div>
           <Badge stage={p.stage} />
         </button>

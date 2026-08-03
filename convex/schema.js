@@ -70,7 +70,9 @@ export default defineSchema({
     type: contactType,
     note: v.string(),
     registeredBy: v.id("users"),
-  }).index("by_prospect", ["prospectId"]),
+  })
+    .index("by_prospect", ["prospectId"])
+    .index("by_registeredBy", ["registeredBy", "at"]),
 
   followUps: defineTable({
     prospectId: v.id("prospects"),
@@ -87,5 +89,7 @@ export default defineSchema({
     product: v.string(),
     closedAt: v.number(),
     closedBy: v.id("users"),
-  }).index("by_prospect", ["prospectId"]),
+  })
+    .index("by_prospect", ["prospectId"])
+    .index("by_closedBy", ["closedBy", "closedAt"]),
 });
