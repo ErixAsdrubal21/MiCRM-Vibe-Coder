@@ -4,16 +4,17 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import TopBar from "@/nav/TopBar.js";
-import { KpiTile } from "@/design/components/core/KpiTile.jsx";
+import { PeriodToggle } from "@/design/components/core/PeriodToggle.jsx";
+import { PerfTile } from "@/design/components/core/PerfTile.jsx";
 import { useSession } from "@/lib/session.js";
 
 const PERIOD_LABEL = { semana: "semana pasada", mes: "mes pasado" };
 
-function deltaLabel(current, previous, period) {
+function delta(current, previous, period, suffix = "") {
   const diff = current - previous;
-  if (diff === 0) return `Sin cambio vs. ${PERIOD_LABEL[period]}`;
+  if (diff === 0) return { text: `Sin cambio vs. ${PERIOD_LABEL[period]}`, direction: "flat" };
   const sign = diff > 0 ? "+" : "";
-  return `${sign}${diff} vs. ${PERIOD_LABEL[period]}`;
+  return { text: `${sign}${diff}${suffix} vs. ${PERIOD_LABEL[period]}`, direction: diff > 0 ? "up" : "down" };
 }
 
 export default function MiDesempeno() {
@@ -27,47 +28,21 @@ export default function MiDesempeno() {
 
   if (!isVendedor) return null;
 
+  const atendidosDelta = data && delta(data.current.atendidos, data.previous.atendidos, period);
+  const ventasDelta = data && delta(data.current.ventas, data.previous.ventas, period);
+  const conversionDelta = data && delta(data.current.tasaConversion, data.previous.tasaConversion, period, " pts");
+
   return (
     <>
       <TopBar title="Mi desempeño" sub="Tus números, para hablar con datos, no con impresiones." />
 
-      <div className="chip-row">
-        <button
-          type="button"
-          className={`chip${period === "semana" ? " selected" : ""}`}
-          onClick={() => setPeriod("semana")}
-        >
-          Semana
-        </button>
-        <button
-          type="button"
-          className={`chip${period === "mes" ? " selected" : ""}`}
-          onClick={() => setPeriod("mes")}
-        >
-          Mes
-        </button>
-      </div>
+      <PeriodToggle value={period} onChange={setPeriod} />
 
       {data ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 12 }}>
-          <div>
-            <KpiTile value={data.current.atendidos} label="Prospectos atendidos" />
-            <p className="list-row__meta" style={{ marginTop: 4, textAlign: "center" }}>
-              {deltaLabel(data.current.atendidos, data.previous.atendidos, period)}
-            </p>
-          </div>
-          <div>
-            <KpiTile value={data.current.ventas} label="Ventas cerradas" />
-            <p className="list-row__meta" style={{ marginTop: 4, textAlign: "center" }}>
-              {deltaLabel(data.current.ventas, data.previous.ventas, period)}
-            </p>
-          </div>
-          <div>
-            <KpiTile value={`${data.current.tasaConversion}%`} label="Tasa de conversión" />
-            <p className="list-row__meta" style={{ marginTop: 4, textAlign: "center" }}>
-              {deltaLabel(data.current.tasaConversion, data.previous.tasaConversion, period)} pts
-            </p>
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+          <PerfTile value={data.current.atendidos} label="Prospectos atendidos" delta={atendidosDelta.text} direction={atendidosDelta.direction} />
+          <PerfTile value={data.current.ventas} label="Ventas cerradas" delta={ventasDelta.text} direction={ventasDelta.direction} />
+          <PerfTile value={`${data.current.tasaConversion}%`} label="Tasa de conversión personal" delta={conversionDelta.text} direction={conversionDelta.direction} />
         </div>
       ) : (
         <p style={{ fontFamily: "var(--font-ui)", color: "var(--color-mute)", fontSize: 13.5, textAlign: "center", padding: "24px 0" }}>

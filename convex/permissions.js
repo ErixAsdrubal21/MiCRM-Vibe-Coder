@@ -20,6 +20,14 @@ export async function requireVendedor(ctx, actorId) {
   return user;
 }
 
+export async function requireAdministrador(ctx, actorId) {
+  const user = await requireUser(ctx, actorId);
+  if (user.role !== "administrador") {
+    throw new Error("Solo un administrador puede ver esta información.");
+  }
+  return user;
+}
+
 export async function requireProspect(ctx, id) {
   const prospect = await ctx.db.get(id);
   if (!prospect) throw new Error("Prospecto no encontrado.");

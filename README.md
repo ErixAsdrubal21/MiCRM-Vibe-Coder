@@ -2,7 +2,7 @@
 
 CRM para pequeños negocios (ver PRD en Notion / proyecto `crm-mvp` en Linear, equipo ICSAAB). Este repo es la versión Next.js + Convex, separada de `~/mi-crm` (la versión Vite/React con datos mock, usada como referencia de estilo y de comportamiento al portar cada pantalla).
 
-**Estado actual:** Login + navegación por rol (ICS-9/10), gestión de prospectos y venta/seguimiento (ICS-11 a ICS-19) y productividad diaria de Carlos (ICS-20 a ICS-22: alerta de riesgo en la Lista, registro de venta cerrada, "Mi desempeño"), con backend real en Convex — permisos por rol e invariantes de negocio (lossReason/monto+producto obligatorios según etapa, próximo seguimiento obligatorio, máximo un seguimiento pendiente por prospecto) validados del lado del servidor, no solo ocultos en la UI. Milestones 5 y 6 (dashboard/reportes de Marta, configuración) todavía no están construidos.
+**Estado actual:** Login + navegación por rol (ICS-9/10), gestión de prospectos y venta/seguimiento (ICS-11 a ICS-19), productividad diaria de Carlos (ICS-20 a ICS-22) y visibilidad y control de Marta (ICS-23 a ICS-27: dashboard ejecutivo, alerta de oportunidades sin atención, reportes de ventas/pérdidas con exportación a CSV), con backend real en Convex — permisos por rol e invariantes de negocio validados del lado del servidor, no solo ocultos en la UI. Las queries de métricas ejecutivas (`dashboard`/`reportes`) exigen rol Administrador igual que las mutations de escritura exigen Vendedor. Milestone 6 (configuración, gestión de equipo) todavía no está construido.
 
 ## Stack
 
@@ -35,12 +35,12 @@ Abre http://localhost:3000 — con `convex dev` corriendo, la página de inicio 
 ```
 convex/
   schema.js           # Tablas: users, prospects, interactions, followUps, sales
-  permissions.js       # requireUser/requireVendedor/requireProspect — guardia de rol
+  permissions.js       # requireUser/requireVendedor/requireAdministrador/requireProspect — guardia de rol
   lib.js               # helpers compartidos (isActiveStage, lastContactAt, pendingFollowUp, daysSince)
   prospects.js          # list/pipeline/get/create/update/changeStage (incl. venta cerrada, ICS-21)
   interactions.js       # add (ICS-15/16)
   followUps.js          # today/complete (ICS-19)
-  metrics.js             # myPerformance (ICS-22)
+  metrics.js             # myPerformance (ICS-22), dashboard/reportes (ICS-23/24/25/26/27) — gateadas a Administrador
   users.js               # loginMock (ICS-9)
 src/
   app/
@@ -59,12 +59,12 @@ src/
     AppLayout.js, TopBar.js, navConfig.js, Placeholder.js
   design/
     styles.css, components.css, forms.css, app-shell.css, tokens/
-    components/core/   # Icon, Button, IconButton, Input, Badge, Tag, KpiTile, PriorityFlag, ProspectCard
+    components/core/   # Icon, Button, IconButton, Input, Badge, Tag, KpiTile, PerfTile, PeriodToggle, PriorityFlag, ProspectCard
 ```
 
 Cada componente en `src/design/components/core/` lleva `"use client"` porque toda la app es interactiva (sesión mock/real en el cliente) — no hay necesidad de dividir Server/Client Components todavía.
 
-**Seguridad MVP:** el login sigue siendo mock (`actorId` viene de `localStorage`, sin autenticación real todavía — ICS-6/7/8 en Backlog). Las mutations de Convex sí validan que ese `actorId` exista y tenga rol `vendedor` antes de escribir, así que un bug de UI no puede saltarse los permisos — pero un cliente que conozca deliberadamente el `_id` de otro usuario sí podría suplantarlo hasta que exista auth real.
+**Seguridad MVP:** el login sigue siendo mock (`actorId` viene de `localStorage`, sin autenticación real todavía — ICS-6/7/8 en Backlog). Las mutations de escritura validan `requireVendedor`, y las queries de métricas ejecutivas (`dashboard`/`reportes`) validan `requireAdministrador` — ambas del lado del servidor, así que un bug de UI (o una URL abierta directamente, como `/dashboard` sin pasar por la nav) no puede saltarse los permisos. Pero un cliente que conozca deliberadamente el `_id` de otro usuario sí podría suplantarlo hasta que exista auth real.
 
 ## Deploy
 

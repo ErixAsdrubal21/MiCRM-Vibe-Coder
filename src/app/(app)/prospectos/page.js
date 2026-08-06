@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import TopBar from "@/nav/TopBar.js";
@@ -19,9 +19,15 @@ const STAGE_LABELS = {
   perdido: "Perdido",
 };
 
+/** Filtro "En riesgo" — misma condición que el Tag de riesgo (ICS-20). ?risk=1 lo preselecciona (ICS-24, link desde el dashboard de Marta). */
+function isAtRisk(p) {
+  return isActiveStage(p.stage) && daysSinceContact(p) > 3;
+}
+
 export default function ProspectosList() {
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
-  const [stageFilter, setStageFilter] = useState("todas");
+  const [stageFilter, setStageFilter] = useState(() => (searchParams.get("risk") === "1" ? "riesgo" : "todas"));
   const router = useRouter();
   const prospectsData = useQuery(api.prospects.list);
 
@@ -30,7 +36,7 @@ export default function ProspectosList() {
     const q = query.trim().toLowerCase();
     return prospects.filter((p) => {
       const matchesQuery = !q || p.name.toLowerCase().includes(q) || p.phone.replace(/\s/g, "").includes(q.replace(/\s/g, ""));
-      const matchesStage = stageFilter === "todas" || p.stage === stageFilter;
+      const matchesStage = stageFilter === "todas" || (stageFilter === "riesgo" ? isAtRisk(p) : p.stage === stageFilter);
       return matchesQuery && matchesStage;
     });
   }, [prospectsData, query, stageFilter]);
@@ -59,6 +65,12 @@ export default function ProspectosList() {
         >
           Todas
         </button>
+        <button
+          className={`chip chip--filter${stageFilter === "riesgo" ? " selected" : ""}`}
+          onClick={() => setStageFilter("riesgo")}
+        >
+          En riesgo
+        </button>
         {STAGES.map((stage) => (
           <button
             key={stage}
@@ -79,7 +91,7 @@ export default function ProspectosList() {
         >
           <div>
             <p className="list-row__title">{p.name}</p>
-            {isActiveStage(p.stage) && daysSinceContact(p) > 3 ? (
+            {isAtRisk(p) ? (
               <Tag variant="risk" icon="alert-triangle">{contactMetaLabel(p)}</Tag>
             ) : (
               <p className="list-row__meta">{contactMetaLabel(p)}</p>
