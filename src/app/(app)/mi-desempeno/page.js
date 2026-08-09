@@ -23,7 +23,7 @@ export default function MiDesempeno() {
   const isVendedor = session?.role === "vendedor";
   const data = useQuery(
     api.metrics.myPerformance,
-    isVendedor ? { actorId: session.id, period } : "skip"
+    isVendedor ? { period } : "skip"
   );
 
   if (!isVendedor) return null;

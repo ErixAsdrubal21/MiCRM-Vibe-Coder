@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireVendedor, requireProspect } from "./permissions";
+import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./permissions";
 import { isActiveStage, lastContactAt, pendingFollowUp, daysSince } from "./lib";
 
 function isDueTodayOrOverdue(followUp) {
@@ -22,6 +22,7 @@ function isDueTodayOrOverdue(followUp) {
 export const today = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuthenticatedUser(ctx);
     const prospects = await ctx.db.query("prospects").collect();
     const active = prospects.filter((p) => isActiveStage(p.stage));
 
@@ -47,9 +48,9 @@ export const today = query({
 
 /** ICS-19: completar tarea = registrar interacción automática + liberar el seguimiento pendiente. */
 export const complete = mutation({
-  args: { actorId: v.id("users"), prospectId: v.id("prospects") },
-  handler: async (ctx, { actorId, prospectId }) => {
-    await requireVendedor(ctx, actorId);
+  args: { prospectId: v.id("prospects") },
+  handler: async (ctx, { prospectId }) => {
+    const user = await requireVendedor(ctx);
     await requireProspect(ctx, prospectId);
 
     const followUp = await pendingFollowUp(ctx, prospectId);
@@ -63,7 +64,7 @@ export const complete = mutation({
       at: Date.now(),
       type: followUp.type,
       note: "Marcado como completado desde Tareas del día.",
-      registeredBy: actorId,
+      registeredBy: user._id,
     });
 
     return ctx.db.get(prospectId);

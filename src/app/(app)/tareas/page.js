@@ -27,7 +27,7 @@ export default function TareasDelDia() {
     setError("");
     setCompletingId(prospectId);
     try {
-      await completeFollowUp({ actorId: session.id, prospectId });
+      await completeFollowUp({ prospectId });
     } catch (err) {
       setError(err.message ?? "No se pudo completar la tarea.");
     } finally {

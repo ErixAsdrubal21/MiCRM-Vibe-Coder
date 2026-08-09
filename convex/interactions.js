@@ -30,14 +30,13 @@ const followUpType = v.union(
  */
 export const add = mutation({
   args: {
-    actorId: v.id("users"),
     prospectId: v.id("prospects"),
     type: contactType,
     note: v.string(),
     nextFollowUp: v.optional(v.object({ at: v.number(), type: followUpType })),
   },
-  handler: async (ctx, { actorId, prospectId, type, note, nextFollowUp }) => {
-    await requireVendedor(ctx, actorId);
+  handler: async (ctx, { prospectId, type, note, nextFollowUp }) => {
+    const user = await requireVendedor(ctx);
     const prospect = await requireProspect(ctx, prospectId);
 
     if (isActiveStage(prospect.stage) && !nextFollowUp) {
@@ -49,7 +48,7 @@ export const add = mutation({
       at: Date.now(),
       type,
       note,
-      registeredBy: actorId,
+      registeredBy: user._id,
     });
 
     const existing = await pendingFollowUp(ctx, prospectId);

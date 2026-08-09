@@ -2,30 +2,36 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
-import { Icon } from "@/design/components/core/Icon.jsx";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { Button } from "@/design/components/core/Button.jsx";
-import { setSession, homePathForRole } from "@/lib/session.js";
 import "./login.css";
 
+/**
+ * ICS-6/8: login real (Convex Auth, Password). Sin registro público a
+ * propósito — Carlos/Marta se aprovisionan con scripts/provision-user.mjs,
+ * no desde este formulario (ver convex/auth.js:createOrUpdateUser, que
+ * rechaza cualquier correo que no exista ya como fila en `users`).
+ * Google se agrega en un paso aparte una vez configuradas las credenciales.
+ */
 export default function Login() {
+  const { signIn } = useAuthActions();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const router = useRouter();
-  const loginMock = useMutation(api.users.loginMock);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const user = await loginMock({ email, provider: "password" });
-    const session = setSession(user);
-    router.replace(homePathForRole(session.role));
-  }
-
-  async function handleGoogle() {
-    const user = await loginMock({ provider: "google" });
-    const session = setSession(user);
-    router.replace(homePathForRole(session.role));
+    setError("");
+    setSubmitting(true);
+    try {
+      await signIn("password", { email, password, flow: "signIn" });
+      router.replace("/");
+    } catch (err) {
+      setError("Correo o contraseña incorrectos.");
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -43,6 +49,7 @@ export default function Login() {
               placeholder="tu@negocio.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
               style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }}
             />
           </label>
@@ -57,20 +64,18 @@ export default function Login() {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              required
               style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }}
             />
           </label>
         </div>
 
-        <Button type="submit" variant="primary" full>Entrar</Button>
+        {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 }}>{error}</p>}
+
+        <Button type="submit" variant="primary" full disabled={submitting}>
+          {submitting ? "Entrando..." : "Entrar"}
+        </Button>
       </form>
-
-      <div className="or-divider"><hr className="divider" />o<hr className="divider" /></div>
-
-      <Button variant="secondary" full onClick={handleGoogle}>
-        <Icon name="chrome" size={18} />
-        Continuar con Google
-      </Button>
 
       <a className="forgot" href="#" onClick={(e) => e.preventDefault()}>Olvidé mi contraseña</a>
     </div>

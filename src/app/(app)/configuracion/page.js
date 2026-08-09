@@ -1,17 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useAuthActions } from "@convex-dev/auth/react";
 import TopBar from "@/nav/TopBar.js";
 import { Button } from "@/design/components/core/Button.jsx";
 import { Icon } from "@/design/components/core/Icon.jsx";
-import { useSession, clearSession } from "@/lib/session.js";
+import { useSession } from "@/lib/session.js";
 
 export default function Configuracion() {
   const session = useSession();
   const router = useRouter();
+  const { signOut } = useAuthActions();
 
-  function handleLogout() {
-    clearSession();
+  async function handleLogout() {
+    await signOut();
     router.replace("/login");
   }
 

@@ -22,7 +22,7 @@ function weekRangeLabel() {
 export default function Dashboard() {
   const session = useSession();
   const isAdministrador = session?.role === "administrador";
-  const data = useQuery(api.metrics.dashboard, isAdministrador ? { actorId: session.id } : "skip");
+  const data = useQuery(api.metrics.dashboard, isAdministrador ? {} : "skip");
 
   if (!isAdministrador) return null;
 

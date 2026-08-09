@@ -54,7 +54,7 @@ export default function FichaProspecto() {
     setSubmitting(true);
     setError("");
     try {
-      await updateProspect({ actorId: session.id, id: prospect._id, ...draft });
+      await updateProspect({ id: prospect._id, ...draft });
       setEditing(false);
     } catch (err) {
       setError(err.message ?? "No se pudo guardar.");

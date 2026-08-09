@@ -10,6 +10,8 @@
     "convex:dev": "convex dev"
   },
   "dependencies": {
+    "@auth/core": "^0.41.1",
+    "@convex-dev/auth": "^0.0.94",
     "convex": "^1.42.3",
     "lucide-react": "^1.27.0",
     "next": "16.2.12",

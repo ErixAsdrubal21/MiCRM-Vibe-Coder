@@ -1,27 +1,30 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
+
 /**
- * Seguridad MVP (no auth real): `actorId` viene de la sesión mock guardada en
- * el cliente (localStorage, ver src/lib/session.js). Estas funciones solo
- * validan que ese actorId corresponda a un usuario/prospecto que existe y
- * tiene el rol correcto — protegen contra bugs de UI, no contra un cliente
- * manipulado que reenvíe el _id de otro usuario. Auth real es ICS-6/7/8.
+ * Seguridad real (ICS-6/7/8): la identidad se deriva del servidor con
+ * `getAuthUserId(ctx)` — nunca de un argumento que el cliente pueda mandar
+ * ("actorId"). Toda mutation y toda query que toque datos del CRM llama a
+ * una de estas tres, no lee `ctx.db` directo sin pasar por aquí.
  */
 
-export async function requireUser(ctx, actorId) {
-  const user = await ctx.db.get(actorId);
+export async function requireAuthenticatedUser(ctx) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new Error("No autenticado.");
+  const user = await ctx.db.get(userId);
   if (!user) throw new Error("Usuario no encontrado.");
   return user;
 }
 
-export async function requireVendedor(ctx, actorId) {
-  const user = await requireUser(ctx, actorId);
+export async function requireVendedor(ctx) {
+  const user = await requireAuthenticatedUser(ctx);
   if (user.role !== "vendedor") {
     throw new Error("Solo un vendedor puede realizar esta acción.");
   }
   return user;
 }
 
-export async function requireAdministrador(ctx, actorId) {
-  const user = await requireUser(ctx, actorId);
+export async function requireAdministrador(ctx) {
+  const user = await requireAuthenticatedUser(ctx);
   if (user.role !== "administrador") {
     throw new Error("Solo un administrador puede ver esta información.");
   }

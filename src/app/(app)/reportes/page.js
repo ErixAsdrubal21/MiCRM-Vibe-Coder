@@ -54,7 +54,7 @@ export default function Reportes() {
   const session = useSession();
   const isAdministrador = session?.role === "administrador";
   const [period, setPeriod] = useState("semana");
-  const data = useQuery(api.metrics.reportes, isAdministrador ? { actorId: session.id, period } : "skip");
+  const data = useQuery(api.metrics.reportes, isAdministrador ? { period } : "skip");
 
   if (!isAdministrador) return null;
 

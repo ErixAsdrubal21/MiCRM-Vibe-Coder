@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireVendedor, requireProspect } from "./permissions";
+import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./permissions";
 import { lastContactAt, pendingFollowUp } from "./lib";
 
 const channel = v.union(
@@ -32,6 +32,7 @@ const lossReason = v.union(
 export const list = query({
   args: {},
   handler: async (ctx) => {
+    await requireAuthenticatedUser(ctx);
     const prospects = await ctx.db.query("prospects").order("desc").collect();
     return Promise.all(
       prospects.map(async (p) => ({
@@ -45,13 +46,17 @@ export const list = query({
 /** ICS-14 Pipeline: prospectos crudos, sin joins — daysInStage se calcula en el cliente desde stageChangedAt. */
 export const pipeline = query({
   args: {},
-  handler: async (ctx) => ctx.db.query("prospects").collect(),
+  handler: async (ctx) => {
+    await requireAuthenticatedUser(ctx);
+    return ctx.db.query("prospects").collect();
+  },
 });
 
 /** ICS-12 Ficha: un prospecto + sus interactions + su followUp pendiente + su venta (si está Ganado). */
 export const get = query({
   args: { id: v.id("prospects") },
   handler: async (ctx, { id }) => {
+    await requireAuthenticatedUser(ctx);
     const prospect = await ctx.db.get(id);
     if (!prospect) return null;
     const interactions = await ctx.db
@@ -67,24 +72,23 @@ export const get = query({
   },
 });
 
-/** ICS-11: crea el prospecto en etapa "nuevo". ownerId se deriva de actorId, nunca se acepta del cliente. */
+/** ICS-11: crea el prospecto en etapa "nuevo". ownerId se deriva del usuario autenticado, nunca se acepta del cliente. */
 export const create = mutation({
   args: {
-    actorId: v.id("users"),
     name: v.string(),
     phone: v.string(),
     channel,
     interest: v.string(),
     note: v.string(),
   },
-  handler: async (ctx, { actorId, ...fields }) => {
-    await requireVendedor(ctx, actorId);
+  handler: async (ctx, fields) => {
+    const user = await requireVendedor(ctx);
     const now = Date.now();
     const _id = await ctx.db.insert("prospects", {
       ...fields,
       stage: "nuevo",
       stageChangedAt: now,
-      ownerId: actorId,
+      ownerId: user._id,
     });
     return ctx.db.get(_id);
   },
@@ -93,7 +97,6 @@ export const create = mutation({
 /** ICS-12: edición de datos de contacto. */
 export const update = mutation({
   args: {
-    actorId: v.id("users"),
     id: v.id("prospects"),
     name: v.string(),
     phone: v.string(),
@@ -101,8 +104,8 @@ export const update = mutation({
     interest: v.string(),
     note: v.string(),
   },
-  handler: async (ctx, { actorId, id, ...patch }) => {
-    await requireVendedor(ctx, actorId);
+  handler: async (ctx, { id, ...patch }) => {
+    await requireVendedor(ctx);
     await requireProspect(ctx, id);
     await ctx.db.patch(id, patch);
     return ctx.db.get(id);
@@ -124,15 +127,14 @@ export const update = mutation({
  */
 export const changeStage = mutation({
   args: {
-    actorId: v.id("users"),
     id: v.id("prospects"),
     stage,
     lossReason: v.optional(lossReason),
     amount: v.optional(v.number()),
     product: v.optional(v.string()),
   },
-  handler: async (ctx, { actorId, id, stage: newStage, lossReason: reason, amount, product }) => {
-    await requireVendedor(ctx, actorId);
+  handler: async (ctx, { id, stage: newStage, lossReason: reason, amount, product }) => {
+    const user = await requireVendedor(ctx);
     await requireProspect(ctx, id);
     if (newStage === "perdido" && !reason) {
       throw new Error("Selecciona un motivo antes de marcar como perdido (ICS-17).");
@@ -148,7 +150,7 @@ export const changeStage = mutation({
 
     const existingSale = await ctx.db.query("sales").withIndex("by_prospect", (q) => q.eq("prospectId", id)).first();
     if (newStage === "ganado") {
-      const saleFields = { prospectId: id, amount, product: product.trim(), closedAt: Date.now(), closedBy: actorId };
+      const saleFields = { prospectId: id, amount, product: product.trim(), closedAt: Date.now(), closedBy: user._id };
       if (existingSale) {
         await ctx.db.patch(existingSale._id, saleFields);
       } else {

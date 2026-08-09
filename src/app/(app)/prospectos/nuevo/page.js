@@ -6,12 +6,10 @@ import { useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
-import { useSession } from "@/lib/session.js";
 import { CHANNELS } from "@/lib/prospects.js";
 
 export default function NuevoProspecto() {
   const router = useRouter();
-  const session = useSession();
   const createProspect = useMutation(api.prospects.create);
 
   const [name, setName] = useState("");
@@ -27,7 +25,7 @@ export default function NuevoProspecto() {
     setError("");
     setSubmitting(true);
     try {
-      const prospect = await createProspect({ actorId: session.id, name, phone, channel, interest, note });
+      const prospect = await createProspect({ name, phone, channel, interest, note });
       router.replace(`/prospectos/${prospect._id}`);
     } catch (err) {
       setError(err.message ?? "No se pudo guardar el prospecto.");

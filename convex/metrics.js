@@ -53,23 +53,22 @@ function statsFor(ownedProspectIds, interactions, sales, start, end) {
  */
 export const myPerformance = query({
   args: {
-    actorId: v.id("users"),
     period: v.union(v.literal("semana"), v.literal("mes")),
   },
-  handler: async (ctx, { actorId, period }) => {
-    await requireVendedor(ctx, actorId);
+  handler: async (ctx, { period }) => {
+    const user = await requireVendedor(ctx);
     const now = Date.now();
     const { currentStart, previousStart, previousEnd } = windowBounds(period, now);
 
     const [prospects, interactions, sales] = await Promise.all([
-      ctx.db.query("prospects").withIndex("by_owner", (q) => q.eq("ownerId", actorId)).collect(),
+      ctx.db.query("prospects").withIndex("by_owner", (q) => q.eq("ownerId", user._id)).collect(),
       ctx.db
         .query("interactions")
-        .withIndex("by_registeredBy", (q) => q.eq("registeredBy", actorId).gte("at", previousStart))
+        .withIndex("by_registeredBy", (q) => q.eq("registeredBy", user._id).gte("at", previousStart))
         .collect(),
       ctx.db
         .query("sales")
-        .withIndex("by_closedBy", (q) => q.eq("closedBy", actorId).gte("closedAt", previousStart))
+        .withIndex("by_closedBy", (q) => q.eq("closedBy", user._id).gte("closedAt", previousStart))
         .collect(),
     ]);
     const ownedProspectIds = new Set(prospects.map((p) => p._id));
@@ -161,9 +160,9 @@ function groupByLossReason(lostProspects) {
  * escritura ya validan `requireVendedor`.
  */
 export const dashboard = query({
-  args: { actorId: v.id("users") },
-  handler: async (ctx, { actorId }) => {
-    await requireAdministrador(ctx, actorId);
+  args: {},
+  handler: async (ctx) => {
+    await requireAdministrador(ctx);
     const now = Date.now();
     const week = windowBounds("semana", now);
     const month = windowBounds("mes", now);
@@ -206,9 +205,9 @@ export const dashboard = query({
  * Administrador — mismo criterio que `dashboard`.
  */
 export const reportes = query({
-  args: { actorId: v.id("users"), period: v.union(v.literal("semana"), v.literal("mes")) },
-  handler: async (ctx, { actorId, period }) => {
-    await requireAdministrador(ctx, actorId);
+  args: { period: v.union(v.literal("semana"), v.literal("mes")) },
+  handler: async (ctx, { period }) => {
+    await requireAdministrador(ctx);
     const now = Date.now();
     const { currentStart } = windowBounds(period, now);
 

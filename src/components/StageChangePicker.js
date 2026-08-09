@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/design/components/core/Button.jsx";
-import { useSession } from "@/lib/session.js";
 import { STAGES, STAGE_LABELS, LOSS_REASONS } from "@/lib/prospects.js";
 
 /**
@@ -15,7 +14,6 @@ import { STAGES, STAGE_LABELS, LOSS_REASONS } from "@/lib/prospects.js";
  * useQuery ya refleja el cambio automáticamente vía reactividad de Convex.
  */
 export default function StageChangePicker({ prospect, onChanged, onCancel }) {
-  const session = useSession();
   const changeStage = useMutation(api.prospects.changeStage);
   const [pendingStage, setPendingStage] = useState(null);
   const [lossReason, setLossReason] = useState("");
@@ -32,7 +30,7 @@ export default function StageChangePicker({ prospect, onChanged, onCancel }) {
     }
     setSubmitting(true);
     try {
-      await changeStage({ actorId: session.id, id: prospect._id, stage });
+      await changeStage({ id: prospect._id, stage });
       onChanged();
     } catch (e) {
       setError(e.message ?? "No se pudo cambiar la etapa.");
@@ -48,7 +46,7 @@ export default function StageChangePicker({ prospect, onChanged, onCancel }) {
     }
     setSubmitting(true);
     try {
-      await changeStage({ actorId: session.id, id: prospect._id, stage: "perdido", lossReason });
+      await changeStage({ id: prospect._id, stage: "perdido", lossReason });
       onChanged();
     } catch (e) {
       setError(e.message ?? "No se pudo cambiar la etapa.");
@@ -69,7 +67,7 @@ export default function StageChangePicker({ prospect, onChanged, onCancel }) {
     }
     setSubmitting(true);
     try {
-      await changeStage({ actorId: session.id, id: prospect._id, stage: "ganado", amount: amountNum, product: product.trim() });
+      await changeStage({ id: prospect._id, stage: "ganado", amount: amountNum, product: product.trim() });
       onChanged();
     } catch (e) {
       setError(e.message ?? "No se pudo cambiar la etapa.");

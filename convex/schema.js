@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 /**
  * Modelo de datos del CRM — espejo del esquema mock de `mi-crm` (ICS-5),
@@ -43,11 +44,16 @@ const lossReason = v.union(
 const role = v.union(v.literal("administrador"), v.literal("vendedor"));
 
 export default defineSchema({
+  ...authTables,
   users: defineTable({
-    name: v.string(),
-    email: v.string(),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    image: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
     role,
-    authProvider: v.union(v.literal("password"), v.literal("google")),
   }).index("by_email", ["email"]),
 
   prospects: defineTable({

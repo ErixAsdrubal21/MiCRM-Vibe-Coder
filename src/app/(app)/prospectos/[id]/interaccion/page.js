@@ -7,7 +7,6 @@ import { api } from "../../../../../../convex/_generated/api";
 import { Icon } from "@/design/components/core/Icon.jsx";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
-import { useSession } from "@/lib/session.js";
 import { isActiveStage, CONTACT_TYPES, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
 import "./interaccion.css";
 
@@ -20,7 +19,6 @@ function defaultFollowUpDate(prospect) {
 export default function RegistrarInteraccion() {
   const { id } = useParams();
   const router = useRouter();
-  const session = useSession();
   const prospect = useQuery(api.prospects.get, { id });
   const addInteraction = useMutation(api.interactions.add);
 
@@ -60,7 +58,6 @@ export default function RegistrarInteraccion() {
     setError("");
     try {
       await addInteraction({
-        actorId: session.id,
         prospectId: prospect._id,
         type,
         note,

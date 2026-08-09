@@ -1,42 +1,29 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { useQuery } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { api } from "../../convex/_generated/api";
 
 /**
- * Sesión en localStorage — mismo patrón que `mockAuth.js` en `mi-crm`.
- * El login real contra Convex (loginMock) ya devuelve un usuario persistido;
- * esto solo cachea esa sesión en el cliente entre pantallas.
+ * Sesión real vía Convex Auth (ICS-6/7/8, reemplaza el mock de localStorage
+ * — ver el historial de git para `mockAuth`/`loginMock` si hace falta
+ * referencia). Misma forma que antes (`{ id, name, email, role }`) a
+ * propósito, para no tener que tocar cada pantalla que ya consumía
+ * `useSession()` — solo cambió de dónde sale el dato: antes de
+ * `localStorage`, ahora de una query autenticada real.
  *
- * `SessionContext` reemplaza el `useOutletContext` de react-router que usa
- * `mi-crm` — `AppLayout` provee la sesión ya cargada, así las pantallas hijas
- * no repiten la lectura de localStorage.
+ * `undefined` = todavía cargando, `null` = sin sesión, objeto = autenticado.
  */
-
-const STORAGE_KEY = "mn-crm-session";
-
-export const SessionContext = createContext(null);
-
 export function useSession() {
-  return useContext(SessionContext);
-}
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const user = useQuery(api.users.currentUser, isAuthenticated ? {} : "skip");
 
-export function setSession(user) {
-  const session = { id: user._id, name: user.name, email: user.email, role: user.role };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  return session;
-}
+  if (isLoading) return undefined;
+  if (!isAuthenticated) return null;
+  if (user === undefined) return undefined;
+  if (user === null) return null;
 
-export function getSession() {
-  if (typeof window === "undefined") return null;
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY));
-  } catch {
-    return null;
-  }
-}
-
-export function clearSession() {
-  localStorage.removeItem(STORAGE_KEY);
+  return { id: user._id, name: user.name, email: user.email, role: user.role };
 }
 
 export function homePathForRole(role) {
