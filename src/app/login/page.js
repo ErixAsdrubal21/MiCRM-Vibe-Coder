@@ -7,11 +7,11 @@ import { Button } from "@/design/components/core/Button.jsx";
 import "./login.css";
 
 /**
- * ICS-6/8: login real (Convex Auth, Password). Sin registro público a
- * propósito — Carlos/Marta se aprovisionan con scripts/provision-user.mjs,
- * no desde este formulario (ver convex/auth.js:createOrUpdateUser, que
- * rechaza cualquier correo que no exista ya como fila en `users`).
- * Google se agrega en un paso aparte una vez configuradas las credenciales.
+ * ICS-6/7/8: login real (Convex Auth, Password + Google). Sin registro
+ * público a propósito — Carlos/Marta se aprovisionan con
+ * scripts/provision-user.mjs, no desde este formulario (ver
+ * convex/auth.js:createOrUpdateUser, que rechaza cualquier correo que no
+ * exista ya como fila en `users`, incluso vía Google).
  */
 export default function Login() {
   const { signIn } = useAuthActions();
@@ -20,6 +20,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -31,6 +32,17 @@ export default function Login() {
     } catch (err) {
       setError("Correo o contraseña incorrectos.");
       setSubmitting(false);
+    }
+  }
+
+  async function handleGoogle() {
+    setError("");
+    setGoogleSubmitting(true);
+    try {
+      await signIn("google");
+    } catch (err) {
+      setError("No se pudo iniciar sesión con Google.");
+      setGoogleSubmitting(false);
     }
   }
 
@@ -72,10 +84,26 @@ export default function Login() {
 
         {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 }}>{error}</p>}
 
-        <Button type="submit" variant="primary" full disabled={submitting}>
+        <Button type="submit" variant="primary" full disabled={submitting || googleSubmitting}>
           {submitting ? "Entrando..." : "Entrar"}
         </Button>
       </form>
+
+      <div className="or-divider">
+        <hr className="divider" />
+        <span>o</span>
+        <hr className="divider" />
+      </div>
+
+      <Button
+        type="button"
+        variant="secondary"
+        full
+        disabled={submitting || googleSubmitting}
+        onClick={handleGoogle}
+      >
+        {googleSubmitting ? "Conectando..." : "Continuar con Google"}
+      </Button>
 
       <a className="forgot" href="#" onClick={(e) => e.preventDefault()}>Olvidé mi contraseña</a>
     </div>
