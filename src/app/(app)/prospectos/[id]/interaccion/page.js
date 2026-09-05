@@ -8,7 +8,6 @@ import { Icon } from "@/design/components/core/Icon.jsx";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { isActiveStage, CONTACT_TYPES, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
-import "./interaccion.css";
 
 function defaultFollowUpDate(prospect) {
   const d = new Date();
