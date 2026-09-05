@@ -2,31 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./permissions";
 import { lastContactAt, pendingFollowUp } from "./lib";
-
-const channel = v.union(
-  v.literal("whatsapp"),
-  v.literal("referido"),
-  v.literal("redes"),
-  v.literal("visita"),
-  v.literal("otro")
-);
-
-const stage = v.union(
-  v.literal("nuevo"),
-  v.literal("contactado"),
-  v.literal("cotizacion"),
-  v.literal("negociacion"),
-  v.literal("ganado"),
-  v.literal("perdido")
-);
-
-const lossReason = v.union(
-  v.literal("precio"),
-  v.literal("competencia"),
-  v.literal("sin-respuesta"),
-  v.literal("tiempo"),
-  v.literal("otro")
-);
+import { channel, stage, lossReason } from "./validators.js";
 
 /** ICS-13 Lista: todos los prospectos + lastContactAt. Sin interactions/nextFollowUp, la Lista no los usa. */
 export const list = query({

@@ -1,6 +1,8 @@
 /** Helpers compartidos entre prospects.js / interactions.js / followUps.js. */
 
-export const ACTIVE_STAGES = ["nuevo", "contactado", "cotizacion", "negociacion"];
+import { ACTIVE_STAGE_VALUES } from "../shared/crmEnums.js";
+
+export const ACTIVE_STAGES = ACTIVE_STAGE_VALUES;
 
 export function isActiveStage(stage) {
   return ACTIVE_STAGES.includes(stage);
@@ -27,4 +29,24 @@ export async function pendingFollowUp(ctx, prospectId) {
     .withIndex("by_prospect", (q) => q.eq("prospectId", prospectId))
     .filter((q) => q.eq(q.field("status"), "pendiente"))
     .first();
+}
+
+/**
+ * ICS-78 — invariante: mientras un follow-up esté `pendiente`, su `ownerId`
+ * debe reflejar el `ownerId` actual del prospecto. Cualquier mutation que
+ * cambie `prospects.ownerId` (reasignación de cartera) debe llamar a este
+ * helper. Hoy no existe esa mutation (MVP monovendedor); queda listo para
+ * ICS-80 / la funcionalidad de reasignación.
+ */
+export async function syncPendingFollowUpOwner(ctx, prospectId, ownerId) {
+  const pending = await ctx.db
+    .query("followUps")
+    .withIndex("by_prospect", (q) => q.eq("prospectId", prospectId))
+    .filter((q) => q.eq(q.field("status"), "pendiente"))
+    .collect();
+  for (const followUp of pending) {
+    if (followUp.ownerId !== ownerId) {
+      await ctx.db.patch(followUp._id, { ownerId });
+    }
+  }
 }

@@ -2,20 +2,7 @@ import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireVendedor, requireProspect } from "./permissions";
 import { isActiveStage, pendingFollowUp } from "./lib";
-
-const contactType = v.union(
-  v.literal("llamada"),
-  v.literal("whatsapp"),
-  v.literal("visita"),
-  v.literal("email")
-);
-
-const followUpType = v.union(
-  v.literal("llamada"),
-  v.literal("whatsapp"),
-  v.literal("visita"),
-  v.literal("otro")
-);
+import { contactType, followUpType } from "./validators.js";
 
 /**
  * ICS-15/16: registra una interacción y programa (opcionalmente) el próximo

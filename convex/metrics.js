@@ -2,10 +2,11 @@ import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireVendedor, requireAdministrador } from "./permissions";
 import { isActiveStage, daysSince, lastContactAt } from "./lib";
+import { LOSS_REASON_VALUES } from "../shared/crmEnums.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PERIOD_DAYS = { semana: 7, mes: 30 };
-const LOSS_REASONS = ["precio", "competencia", "sin-respuesta", "tiempo", "otro"];
+const LOSS_REASONS = LOSS_REASON_VALUES;
 
 /**
  * Ventanas rodantes (no calendario) — consistente con `daysSince`/
