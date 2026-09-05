@@ -10,8 +10,7 @@ import {
 } from "@convex-dev/auth/server";
 import { api, internal } from "./_generated/api";
 import { requireAdministrador } from "./permissions";
-
-const role = v.union(v.literal("administrador"), v.literal("vendedor"));
+import { role } from "./validators.js";
 
 /**
  * ICS-6/7/8 — reemplaza loginMock. Sesión real vía Convex Auth: el cliente

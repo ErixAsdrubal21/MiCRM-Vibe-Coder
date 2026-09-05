@@ -1,47 +1,30 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
+import {
+  stage,
+  contactType,
+  followUpType,
+  channel,
+  lossReason,
+  role,
+  outcome,
+  resolution,
+  interactionSource,
+  timelineEventType,
+} from "./validators.js";
 
 /**
  * Modelo de datos del CRM — espejo del esquema mock de `mi-crm` (ICS-5),
  * normalizado para Convex (tablas + referencias por _id en vez de arrays
- * embebidos). Los 6 nombres de etapa y los tipos de contacto se validan
- * con `v.union(v.literal(...))` para que coincidan exactamente con el PRD.
+ * embebidos). Los nombres de etapa, tipos de contacto, etc. viven en
+ * `shared/crmEnums.js` y se validan con `v.union(v.literal(...))` (ICS-78).
+ *
+ * ICS-78 añade: auditoría de interacciones (`outcome`, `source`, edición y
+ * soft-delete), cierre trazable de seguimientos (`resolution`, `completedAt`,
+ * ...), `followUps.ownerId` (espejo de `prospects.ownerId`) y la tabla
+ * `timelineEvents` como fuente cronológica única de la ficha.
  */
-
-const stage = v.union(
-  v.literal("nuevo"),
-  v.literal("contactado"),
-  v.literal("cotizacion"),
-  v.literal("negociacion"),
-  v.literal("ganado"),
-  v.literal("perdido")
-);
-
-const contactType = v.union(
-  v.literal("llamada"),
-  v.literal("whatsapp"),
-  v.literal("visita"),
-  v.literal("email")
-);
-
-const channel = v.union(
-  v.literal("whatsapp"),
-  v.literal("referido"),
-  v.literal("redes"),
-  v.literal("visita"),
-  v.literal("otro")
-);
-
-const lossReason = v.union(
-  v.literal("precio"),
-  v.literal("competencia"),
-  v.literal("sin-respuesta"),
-  v.literal("tiempo"),
-  v.literal("otro")
-);
-
-const role = v.union(v.literal("administrador"), v.literal("vendedor"));
 
 export default defineSchema({
   ...authTables,
@@ -76,18 +59,42 @@ export default defineSchema({
     type: contactType,
     note: v.string(),
     registeredBy: v.id("users"),
+    // ICS-78 — todos opcionales: filas anteriores se leen sin migración.
+    outcome: v.optional(outcome),
+    // Origen: `manual` (persona), `follow-up` (generada por followUps.complete),
+    // `sistema`. Ausente = `manual`. `cumplimientoNota` (ICS-87) solo cuenta manual/ausente.
+    source: v.optional(interactionSource),
+    editedAt: v.optional(v.number()),
+    editedBy: v.optional(v.id("users")),
+    deletedAt: v.optional(v.number()),
+    deletedBy: v.optional(v.id("users")),
+    // El seguimiento que esta interacción cierra, si aplica.
+    followUpId: v.optional(v.id("followUps")),
+    // El seguimiento programado como resultado de esta interacción.
+    nextFollowUpId: v.optional(v.id("followUps")),
   })
     .index("by_prospect", ["prospectId"])
-    .index("by_registeredBy", ["registeredBy", "at"]),
+    .index("by_prospect_and_at", ["prospectId", "at"])
+    .index("by_registeredBy", ["registeredBy", "at"])
+    .index("by_at", ["at"]),
 
   followUps: defineTable({
     prospectId: v.id("prospects"),
     at: v.number(),
-    type: v.union(v.literal("llamada"), v.literal("whatsapp"), v.literal("visita"), v.literal("otro")),
+    type: followUpType,
     status: v.union(v.literal("pendiente"), v.literal("completado")),
+    // ICS-78 — cierre trazable.
+    completedAt: v.optional(v.number()),
+    completedBy: v.optional(v.id("users")),
+    resolution: v.optional(resolution),
+    completedByInteractionId: v.optional(v.id("interactions")),
+    closureReason: v.optional(v.string()),
+    // Vendedor dueño del seguimiento — espejo de prospects.ownerId. Backfill en ICS-78.
+    ownerId: v.optional(v.id("users")),
   })
     .index("by_prospect", ["prospectId"])
-    .index("by_status_and_date", ["status", "at"]),
+    .index("by_status_and_date", ["status", "at"])
+    .index("by_owner_status_and_date", ["ownerId", "status", "at"]),
 
   sales: defineTable({
     prospectId: v.id("prospects"),
@@ -98,4 +105,18 @@ export default defineSchema({
   })
     .index("by_prospect", ["prospectId"])
     .index("by_closedBy", ["closedBy", "closedAt"]),
+
+  // ICS-78 — línea de tiempo de la relación (ficha). Append-only: la escritura
+  // desde las mutations y la query `timeline.listByProspect` viven en ICS-85.
+  timelineEvents: defineTable({
+    prospectId: v.id("prospects"),
+    at: v.number(),
+    type: timelineEventType,
+    actorId: v.optional(v.id("users")),
+    interactionId: v.optional(v.id("interactions")),
+    followUpId: v.optional(v.id("followUps")),
+    saleId: v.optional(v.id("sales")),
+    fromStage: v.optional(stage),
+    toStage: v.optional(stage),
+  }).index("by_prospect_and_at", ["prospectId", "at"]),
 });
