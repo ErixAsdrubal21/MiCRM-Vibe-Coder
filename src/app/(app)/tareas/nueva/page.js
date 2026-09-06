@@ -11,12 +11,7 @@ import { Badge } from "@/design/components/core/Badge.jsx";
 import { Tag } from "@/design/components/core/Tag.jsx";
 import { useSession, homePathForRole } from "@/lib/session.js";
 import { isActiveStage, contactMetaLabel, daysSinceContact, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
-
-function defaultDate() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
+import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
 
 /**
  * ICS-92: "Nueva tarea" desde /tareas — agenda un seguimiento eligiendo el
@@ -26,7 +21,7 @@ function defaultDate() {
 export default function NuevaTarea() {
   const router = useRouter();
   const session = useSession();
-  const prospectsData = useQuery(api.prospects.list);
+  const prospectsData = useQuery(api.prospects.listMine);
   const createFollowUp = useMutation(api.followUps.create);
 
   const [query, setQuery] = useState("");
@@ -54,7 +49,7 @@ export default function NuevaTarea() {
     setSubmitting(true);
     setError("");
     try {
-      await createFollowUp({ prospectId: selected._id, at: new Date(date || defaultDate()).getTime(), type });
+      await createFollowUp({ prospectId: selected._id, at: isoToLocalMs(date || plusDaysISO(1)), type });
       router.replace(`/prospectos/${selected._id}`);
     } catch (err) {
       setError(err.message ?? "No se pudo programar el seguimiento.");
@@ -135,7 +130,8 @@ export default function NuevaTarea() {
               <input
                 id="nt-fecha"
                 type="date"
-                value={date || defaultDate()}
+                min={todayISO()}
+                value={date || plusDaysISO(1)}
                 onChange={(e) => setDate(e.target.value)}
                 style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }}
               />

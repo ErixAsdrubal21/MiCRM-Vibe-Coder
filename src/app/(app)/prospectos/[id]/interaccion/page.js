@@ -8,11 +8,10 @@ import { Icon } from "@/design/components/core/Icon.jsx";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { isActiveStage, CONTACT_TYPES, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
+import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
 
 function defaultFollowUpDate(prospect) {
-  const d = new Date();
-  d.setDate(d.getDate() + (prospect.stage === "cotizacion" ? 2 : 1));
-  return d.toISOString().slice(0, 10);
+  return plusDaysISO(prospect.stage === "cotizacion" ? 2 : 1);
 }
 
 export default function RegistrarInteraccion() {
@@ -60,7 +59,7 @@ export default function RegistrarInteraccion() {
         prospectId: prospect._id,
         type,
         note,
-        nextFollowUp: followUpDateValue ? { at: new Date(followUpDateValue).getTime(), type: followUpType } : undefined,
+        nextFollowUp: followUpDateValue ? { at: isoToLocalMs(followUpDateValue), type: followUpType } : undefined,
       });
       router.replace(`/prospectos/${prospect._id}`);
     } catch (err) {
@@ -117,6 +116,7 @@ export default function RegistrarInteraccion() {
             <label className="mn-input mn-input--field">
               <input
                 type="date"
+                min={todayISO()}
                 value={followUpDateValue}
                 onChange={(e) => setFollowUpDate(e.target.value)}
                 style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }}

@@ -4,11 +4,20 @@ import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./pe
 import { isActiveStage, lastContactAt, pendingFollowUp, daysSince } from "./lib";
 import { followUpType } from "./validators.js";
 
-/** 00:00 de hoy, hora del servidor — piso para "no agendar en el pasado" (ICS-92). */
-function startOfToday() {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Piso para "no agendar en el pasado" (ICS-92). El servidor corre en UTC y el
+ * cliente manda la medianoche local del día elegido; con negocio en México
+ * (UTC-6) eso son las 06:00 UTC, siempre > 00:00 UTC del mismo día. El margen
+ * de 24 h absorbe cualquier desfase de zona cliente/servidor — el objetivo de
+ * la validación es frenar errores obvios (elegir el mes pasado), no discutir
+ * horas.
+ */
+function pastCutoff() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  return d.getTime();
+  return d.getTime() - DAY_MS;
 }
 
 function isDueTodayOrOverdue(followUp) {
@@ -95,10 +104,13 @@ export const create = mutation({
     type: followUpType,
   },
   handler: async (ctx, { prospectId, at, type }) => {
-    await requireVendedor(ctx);
+    const user = await requireVendedor(ctx);
     const prospect = await requireProspect(ctx, prospectId);
 
-    if (at < startOfToday()) {
+    if (prospect.ownerId !== user._id) {
+      throw new Error("No puedes programar seguimientos para un prospecto de otro vendedor.");
+    }
+    if (at < pastCutoff()) {
       throw new Error("No se puede agendar un seguimiento en el pasado.");
     }
     if (!isActiveStage(prospect.stage)) {
