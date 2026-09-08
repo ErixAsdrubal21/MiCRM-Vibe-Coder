@@ -71,18 +71,27 @@ export function businessToday() {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Valida el formato y que sea una fecha real ("2026-02-31" no lo es). */
+/**
+ * Valida el formato, que sea una fecha real ("2026-02-31" no lo es) y que el
+ * año caiga en un rango operativo (2000–2100). El límite del año cierra el
+ * borde de `Date.UTC(y, ...)`, que remapea años 0–99 a 1900–1999: sin esto,
+ * "0099-01-01" pasaría el resto de la validación y `calendarDateToMs` lo
+ * guardaría como 1999.
+ */
 export function isValidCalendarDate(s) {
   if (typeof s !== "string" || !ISO_DATE.test(s)) return false;
+  const year = Number(s.slice(0, 4));
+  if (year < 2000 || year > 2100) return false;
   const t = Date.parse(`${s}T00:00:00Z`);
   return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
 }
 
 /**
- * "YYYY-MM-DD" → timestamp de las 12:00 UTC de ese día. Mediodía UTC es el
- * ancla que cae en el día calendario correcto al mostrarse en cualquier zona
- * de UTC-12 a UTC+11 (México, UTC-6, con margen de sobra). Sin aritmética de
- * offsets.
+ * "YYYY-MM-DD" → timestamp de las 12:00 UTC de ese día. Asume un año de 4
+ * dígitos ya validado por `isValidCalendarDate` (evita el remapeo 0–99 →
+ * 1900–1999 de `Date.UTC`). Mediodía UTC es el ancla que cae en el día
+ * calendario correcto al mostrarse en cualquier zona de UTC-12 a UTC+11
+ * (México, UTC-6, con margen de sobra). Sin aritmética de offsets.
  */
 export function calendarDateToMs(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
