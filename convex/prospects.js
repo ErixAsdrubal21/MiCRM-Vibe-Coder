@@ -19,6 +19,31 @@ export const list = query({
   },
 });
 
+/**
+ * ICS-92: solo los prospectos del vendedor autenticado (índice by_owner) +
+ * lastContactAt. Lo usa el selector de "Nueva tarea" — Carlos no debe ver ni
+ * agendar seguimientos sobre la cartera de otro vendedor. (La Lista general
+ * `list` sigue mostrando todo; aislar esa vista es una decisión de producto
+ * aparte.)
+ */
+export const listMine = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireVendedor(ctx);
+    const prospects = await ctx.db
+      .query("prospects")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .order("desc")
+      .collect();
+    return Promise.all(
+      prospects.map(async (p) => ({
+        ...p,
+        lastContactAt: await lastContactAt(ctx, p._id, p._creationTime),
+      }))
+    );
+  },
+});
+
 /** ICS-14 Pipeline: prospectos crudos, sin joins — daysInStage se calcula en el cliente desde stageChangedAt. */
 export const pipeline = query({
   args: {},

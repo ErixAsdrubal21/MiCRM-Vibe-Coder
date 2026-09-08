@@ -17,6 +17,7 @@ import type * as metrics from "../metrics.js";
 import type * as migrations from "../migrations.js";
 import type * as permissions from "../permissions.js";
 import type * as prospects from "../prospects.js";
+import type * as testHelpers from "../testHelpers.js";
 import type * as users from "../users.js";
 import type * as validators from "../validators.js";
 
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   permissions: typeof permissions;
   prospects: typeof prospects;
+  testHelpers: typeof testHelpers;
   users: typeof users;
   validators: typeof validators;
 }>;

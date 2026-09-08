@@ -42,6 +42,7 @@ export default function TareasDelDia() {
       <TopBar
         title={`Hola, ${session.name}`}
         sub={`${new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })} · ${todos.length} pendiente${todos.length === 1 ? "" : "s"} hoy`}
+        action={<IconButton icon="plus" label="Nueva tarea" onClick={() => router.push("/tareas/nueva")} />}
       />
 
       {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)" }}>{error}</p>}
