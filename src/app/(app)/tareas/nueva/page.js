@@ -11,7 +11,7 @@ import { Badge } from "@/design/components/core/Badge.jsx";
 import { Tag } from "@/design/components/core/Tag.jsx";
 import { useSession, homePathForRole } from "@/lib/session.js";
 import { isActiveStage, contactMetaLabel, daysSinceContact, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
-import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
+import { todayISO, plusDaysISO } from "@/lib/dates.js";
 
 /**
  * ICS-92: "Nueva tarea" desde /tareas — agenda un seguimiento eligiendo el
@@ -49,7 +49,7 @@ export default function NuevaTarea() {
     setSubmitting(true);
     setError("");
     try {
-      await createFollowUp({ prospectId: selected._id, at: isoToLocalMs(date || plusDaysISO(1)), type });
+      await createFollowUp({ prospectId: selected._id, date: date || plusDaysISO(1), type });
       router.replace(`/prospectos/${selected._id}`);
     } catch (err) {
       setError(err.message ?? "No se pudo programar el seguimiento.");
