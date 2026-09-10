@@ -1,6 +1,6 @@
 /** Helpers compartidos entre prospects.js / interactions.js / followUps.js. */
 
-import { ACTIVE_STAGE_VALUES } from "../shared/crmEnums.js";
+import { ACTIVE_STAGE_VALUES, TIMELINE_EVENT_TYPE_VALUES } from "../shared/crmEnums.js";
 
 export const ACTIVE_STAGES = ACTIVE_STAGE_VALUES;
 
@@ -49,6 +49,47 @@ export async function syncPendingFollowUpOwner(ctx, prospectId, ownerId) {
       await ctx.db.patch(followUp._id, { ownerId });
     }
   }
+}
+
+/**
+ * ICS-85 — `timelineEvents` es la ÚNICA fuente cronológica de la ficha
+ * (ICS-86), append-only. Este helper es el único punto de escritura: siempre
+ * `insert`, nunca `patch` ni `delete` de un evento. Su firma es estable para
+ * que las mutations de ICS-79 (interacciones) e ICS-80 (seguimientos / cambio
+ * de etapa) lo llamen sin acoplarse a la forma de la tabla.
+ *
+ * Campo obligatorio por `type` (además de `prospectId`, `at`, `type`):
+ *   - `interaccion`         → `interactionId`  (+ `actorId` = quien la registró)
+ *   - `cambio-etapa`        → `toStage`        (`fromStage` ausente = primer evento)
+ *   - `cierre-seguimiento`  → `followUpId`     (+ `interactionId` de la nota de cierre)
+ *   - `venta`               → `saleId`
+ * `actorId` es recomendable siempre salvo en eventos sintéticos del backfill.
+ */
+const TIMELINE_REQUIRED_FIELD = {
+  interaccion: "interactionId",
+  "cambio-etapa": "toStage",
+  "cierre-seguimiento": "followUpId",
+  venta: "saleId",
+};
+
+export async function recordTimelineEvent(
+  ctx,
+  { prospectId, at, type, actorId, interactionId, followUpId, saleId, fromStage, toStage },
+) {
+  if (!TIMELINE_EVENT_TYPE_VALUES.includes(type)) {
+    throw new Error(`Tipo de evento de línea de tiempo desconocido: ${type}`);
+  }
+  const required = TIMELINE_REQUIRED_FIELD[type];
+  const fields = { prospectId, at, type, actorId, interactionId, followUpId, saleId, fromStage, toStage };
+  if (fields[required] === undefined || fields[required] === null) {
+    throw new Error(`Un evento "${type}" requiere ${required}.`);
+  }
+  // Omitir las claves ausentes en vez de guardar `undefined` explícito.
+  const doc = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) doc[key] = value;
+  }
+  return ctx.db.insert("timelineEvents", doc);
 }
 
 /**
