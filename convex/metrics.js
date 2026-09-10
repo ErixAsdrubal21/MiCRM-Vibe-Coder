@@ -30,7 +30,7 @@ function conversionRate(sold, base) {
 function statsFor(ownedProspectIds, interactions, sales, start, end) {
   const atendidosIds = new Set(
     interactions
-      .filter((i) => i.at >= start && i.at < end && ownedProspectIds.has(i.prospectId))
+      .filter((i) => !i.deletedAt && i.at >= start && i.at < end && ownedProspectIds.has(i.prospectId))
       .map((i) => i.prospectId)
   );
   const atendidos = atendidosIds.size;
