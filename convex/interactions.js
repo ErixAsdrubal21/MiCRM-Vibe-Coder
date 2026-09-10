@@ -1,7 +1,9 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireVendedor, requireProspect } from "./permissions";
+import { paginationOptsValidator } from "convex/server";
+import { requireVendedor, requireProspect, requireAuthenticatedUser } from "./permissions";
 import { isActiveStage, pendingFollowUp, recordTimelineEvent } from "./lib";
+import { collectFilteredPage, hydrateByIds } from "./pagination";
 import { contactType, followUpType, outcome } from "./validators.js";
 
 /**
@@ -179,5 +181,104 @@ export const remove = mutation({
     }
     await ctx.db.patch(id, { deletedAt: Date.now(), deletedBy: user._id });
     return { ok: true };
+  },
+});
+
+/**
+ * ICS-81 — feed global de interacciones para `/actividad` (vista "Interacciones").
+ *
+ * Un SOLO índice base por request, elegido por el filtro principal (nunca
+ * "filtrar después de paginar"):
+ *   - `prospectExactId`               → `by_prospect_and_at`
+ *   - scope de un vendedor            → `by_registeredBy` (con rango `at`)
+ *   - resto (admin, todos)            → `by_at`
+ * `type`/`outcome` son filtros SECUNDARIOS: `collectFilteredPage` sigue leyendo
+ * lotes del índice base hasta juntar `numItems` que pasan, sin páginas vacías
+ * (tope: 25 lotes internos por página devuelta → si se alcanza, devuelve lo
+ * reunido + cursor).
+ *
+ * Permisos: `vendedor` → forzado a `registeredBy === user._id` (ignora
+ * `vendedorId`); `administrador` → respeta `vendedorId` o ve todo.
+ * Excluye siempre las interacciones con `deletedAt`.
+ */
+export const feed = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    filters: v.optional(
+      v.object({
+        vendedorId: v.optional(v.id("users")),
+        type: v.optional(contactType),
+        outcome: v.optional(outcome),
+        from: v.optional(v.number()),
+        to: v.optional(v.number()),
+        prospectExactId: v.optional(v.id("prospects")),
+      }),
+    ),
+  },
+  handler: async (ctx, { paginationOpts, filters = {} }) => {
+    const user = await requireAuthenticatedUser(ctx);
+    const { type, outcome: outcomeFilter, from, to, prospectExactId } = filters;
+    const scopedVendedorId = user.role === "vendedor" ? user._id : filters.vendedorId;
+
+    const withRange = (q, field) => {
+      let r = q;
+      if (from !== undefined) r = r.gte(field, from);
+      if (to !== undefined) r = r.lte(field, to);
+      return r;
+    };
+
+    let makeQuery;
+    if (prospectExactId) {
+      makeQuery = () =>
+        ctx.db
+          .query("interactions")
+          .withIndex("by_prospect_and_at", (q) => withRange(q.eq("prospectId", prospectExactId), "at"))
+          .order("desc");
+    } else if (scopedVendedorId) {
+      makeQuery = () =>
+        ctx.db
+          .query("interactions")
+          .withIndex("by_registeredBy", (q) => withRange(q.eq("registeredBy", scopedVendedorId), "at"))
+          .order("desc");
+    } else {
+      makeQuery = () =>
+        ctx.db
+          .query("interactions")
+          .withIndex("by_at", (q) => withRange(q, "at"))
+          .order("desc");
+    }
+
+    const predicate = (i) =>
+      !i.deletedAt &&
+      (type === undefined || i.type === type) &&
+      (outcomeFilter === undefined || i.outcome === outcomeFilter);
+
+    const result = await collectFilteredPage(makeQuery, paginationOpts, predicate);
+
+    const userIds = new Set();
+    const prospectIds = new Set();
+    for (const i of result.page) {
+      userIds.add(i.registeredBy);
+      prospectIds.add(i.prospectId);
+    }
+    const [users, prospects] = await Promise.all([
+      hydrateByIds(ctx, userIds),
+      hydrateByIds(ctx, prospectIds),
+    ]);
+
+    return {
+      ...result,
+      page: result.page.map((i) => {
+        const prospect = prospects.get(i.prospectId);
+        return {
+          ...i,
+          prospectId: i.prospectId,
+          prospectName: prospect?.name ?? null,
+          stage: prospect?.stage ?? null,
+          registeredById: i.registeredBy,
+          registeredByName: users.get(i.registeredBy)?.name ?? null,
+        };
+      }),
+    };
   },
 });

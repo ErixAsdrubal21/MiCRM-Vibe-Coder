@@ -44,6 +44,26 @@ export const listMine = query({
   },
 });
 
+/**
+ * ICS-81 — autocompletar de `/actividad`: hasta 10 prospectos cuyo nombre
+ * contiene `query` (case-insensitive). Scan acotado de `prospects` (tabla
+ * chica en el MVP). El feed recibe UN `prospectExactId` resuelto desde aquí —
+ * así el feed usa un solo cursor sin merge.
+ */
+export const search = query({
+  args: { query: v.string() },
+  handler: async (ctx, { query: term }) => {
+    await requireAuthenticatedUser(ctx);
+    const needle = term.trim().toLowerCase();
+    if (needle === "") return [];
+    const prospects = await ctx.db.query("prospects").collect();
+    return prospects
+      .filter((p) => p.name.toLowerCase().includes(needle))
+      .slice(0, 10)
+      .map((p) => ({ _id: p._id, name: p.name, stage: p.stage }));
+  },
+});
+
 /** ICS-14 Pipeline: prospectos crudos, sin joins — daysInStage se calcula en el cliente desde stageChangedAt. */
 export const pipeline = query({
   args: {},

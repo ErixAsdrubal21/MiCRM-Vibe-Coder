@@ -162,3 +162,8 @@ export function endOfBusinessTodayMs() {
   const tomorrow = msToBusinessDate(calendarDateToMs(businessToday()) + 24 * 60 * 60 * 1000);
   return Date.parse(`${tomorrow}T00:00:00-06:00`);
 }
+
+/** Instante en que empieza "hoy" en la zona del negocio (medianoche de México, UTC-6 fijo). */
+export function startOfBusinessTodayMs() {
+  return Date.parse(`${businessToday()}T00:00:00-06:00`);
+}
