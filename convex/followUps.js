@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./permissions";
 import {
   isActiveStage,
@@ -10,8 +11,10 @@ import {
   calendarDateToMs,
   isValidCalendarDate,
   endOfBusinessTodayMs,
+  startOfBusinessTodayMs,
   recordTimelineEvent,
 } from "./lib";
+import { collectFilteredPage, hydrateByIds } from "./pagination";
 import { contactType, followUpType, resolution } from "./validators.js";
 
 /**
@@ -52,6 +55,91 @@ export const today = query({
     );
 
     return rows.filter(Boolean).sort((a, b) => b.daysSinceContact - a.daysSinceContact);
+  },
+});
+
+/**
+ * ICS-81 — lista de seguimientos para `/actividad` (vista "Seguimientos").
+ *
+ * `estado`:
+ *   - `pendiente`  → `status "pendiente"` con `at >= inicio de hoy` (negocio)
+ *   - `vencido`    → `status "pendiente"` con `at <  inicio de hoy`
+ *   - `completado` → `status "completado"`
+ *   - ausente      → todos los `pendiente` (pendientes + vencidos)
+ *
+ * Índice base: `by_owner_status_and_date` cuando hay scope de vendedor
+ * (`ownerId`, seteado y con backfill en ICS-78); `by_status_and_date` para
+ * admin sin filtro de vendedor. El corte "hoy" y `from`/`to` van como
+ * predicado (`collectFilteredPage`) — el conjunto de pendientes es chico y
+ * así se evita multiplicar rangos de índice. `vendedor` → forzado a su `ownerId`.
+ */
+export const list = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    filters: v.optional(
+      v.object({
+        estado: v.optional(v.union(v.literal("pendiente"), v.literal("vencido"), v.literal("completado"))),
+        vendedorId: v.optional(v.id("users")),
+        from: v.optional(v.number()),
+        to: v.optional(v.number()),
+      }),
+    ),
+  },
+  handler: async (ctx, { paginationOpts, filters = {} }) => {
+    const user = await requireAuthenticatedUser(ctx);
+    const { estado, from, to } = filters;
+    const scopedOwnerId = user.role === "vendedor" ? user._id : filters.vendedorId;
+    const status = estado === "completado" ? "completado" : "pendiente";
+    const startToday = startOfBusinessTodayMs();
+
+    const makeQuery = () => {
+      if (scopedOwnerId) {
+        return ctx.db
+          .query("followUps")
+          .withIndex("by_owner_status_and_date", (q) => q.eq("ownerId", scopedOwnerId).eq("status", status))
+          .order("desc");
+      }
+      return ctx.db
+        .query("followUps")
+        .withIndex("by_status_and_date", (q) => q.eq("status", status))
+        .order("desc");
+    };
+
+    const predicate = (f) => {
+      if (estado === "pendiente" && f.at < startToday) return false;
+      if (estado === "vencido" && f.at >= startToday) return false;
+      if (from !== undefined && f.at < from) return false;
+      if (to !== undefined && f.at > to) return false;
+      return true;
+    };
+
+    const result = await collectFilteredPage(makeQuery, paginationOpts, predicate);
+
+    const prospectIds = new Set();
+    const userIds = new Set();
+    for (const f of result.page) {
+      prospectIds.add(f.prospectId);
+      if (f.completedBy) userIds.add(f.completedBy);
+    }
+    const [prospects, users] = await Promise.all([
+      hydrateByIds(ctx, prospectIds),
+      hydrateByIds(ctx, userIds),
+    ]);
+
+    return {
+      ...result,
+      page: result.page.map((f) => {
+        const prospect = prospects.get(f.prospectId);
+        return {
+          ...f,
+          prospectId: f.prospectId,
+          prospectName: prospect?.name ?? null,
+          stage: prospect?.stage ?? null,
+          vencido: f.status === "pendiente" && f.at < startToday,
+          completedByName: f.status === "completado" ? users.get(f.completedBy)?.name ?? null : null,
+        };
+      }),
+    };
   },
 });
 

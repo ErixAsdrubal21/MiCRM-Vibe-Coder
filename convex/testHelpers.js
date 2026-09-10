@@ -2,7 +2,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { recordTimelineEvent, syncPendingFollowUpOwner } from "./lib";
 
-const SMOKE_PREFIXES = ["[SMOKE ICS-92]", "[SMOKE ICS-85]", "[SMOKE ICS-79]", "[SMOKE ICS-80]"];
+const SMOKE_PREFIXES = ["[SMOKE ICS-92]", "[SMOKE ICS-85]", "[SMOKE ICS-79]", "[SMOKE ICS-80]", "[SMOKE ICS-81]"];
 
 /** Rechaza cualquier id cuyo prospecto no sea de prueba (o no exista). */
 async function requireSmokeProspect(ctx, id) {

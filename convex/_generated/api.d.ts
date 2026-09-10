@@ -15,6 +15,7 @@ import type * as interactions from "../interactions.js";
 import type * as lib from "../lib.js";
 import type * as metrics from "../metrics.js";
 import type * as migrations from "../migrations.js";
+import type * as pagination from "../pagination.js";
 import type * as permissions from "../permissions.js";
 import type * as prospects from "../prospects.js";
 import type * as testHelpers from "../testHelpers.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   lib: typeof lib;
   metrics: typeof metrics;
   migrations: typeof migrations;
+  pagination: typeof pagination;
   permissions: typeof permissions;
   prospects: typeof prospects;
   testHelpers: typeof testHelpers;
