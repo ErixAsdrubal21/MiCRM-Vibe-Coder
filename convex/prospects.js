@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./permissions";
-import { lastContactAt, pendingFollowUp } from "./lib";
+import { lastContactAt, pendingFollowUp, recordTimelineEvent } from "./lib";
 import { channel, stage, lossReason } from "./validators.js";
 
 /** ICS-13 Lista: todos los prospectos + lastContactAt. Sin interactions/nextFollowUp, la Lista no los usa. */
@@ -126,6 +126,18 @@ export const update = mutation({
  * cierto que el prospecto está vendido. Sin esto, un ciclo
  * ganado → otra etapa → ganado generaba una fila de `sales` por cada vuelta,
  * inflando conteos en Ficha/Mi desempeño.
+ *
+ * ICS-80:
+ *  - la línea de tiempo (append-only) recibe SIEMPRE un evento `cambio-etapa`
+ *    con `fromStage`/`toStage`; al entrar a "ganado", además un evento `venta`.
+ *    Salir de "ganado" borra la fila `sales` como antes, pero el evento `venta`
+ *    histórico NO se borra — la hidratación de ICS-85 lo muestra como
+ *    "venta registrada" aunque después se revirtiera.
+ *  - al pasar a "ganado"/"perdido" se cancela el seguimiento pendiente
+ *    (`resolution: "cancelado"`, `closureReason`), nunca "hecho".
+ *
+ * NOTA (ICS-80): la creación de la venta seguirá viviendo aquí hasta que el
+ * milestone 7 (ICS-99) desacople `sales` de `changeStage`.
  */
 export const changeStage = mutation({
   args: {
@@ -137,27 +149,55 @@ export const changeStage = mutation({
   },
   handler: async (ctx, { id, stage: newStage, lossReason: reason, amount, product }) => {
     const user = await requireVendedor(ctx);
-    await requireProspect(ctx, id);
+    const prospect = await requireProspect(ctx, id);
+    const fromStage = prospect.stage;
     if (newStage === "perdido" && !reason) {
       throw new Error("Selecciona un motivo antes de marcar como perdido (ICS-17).");
     }
     if (newStage === "ganado" && (!amount || amount <= 0 || !product?.trim())) {
       throw new Error("Registra el monto y el producto/servicio vendido antes de marcar como ganado (ICS-21).");
     }
+    const now = Date.now();
     await ctx.db.patch(id, {
       stage: newStage,
-      stageChangedAt: Date.now(),
+      stageChangedAt: now,
       lossReason: newStage === "perdido" ? reason : undefined,
+    });
+
+    // Cerrar (cancelar) el seguimiento pendiente al cerrar el prospecto.
+    if (newStage === "ganado" || newStage === "perdido") {
+      const pending = await pendingFollowUp(ctx, id);
+      if (pending) {
+        await ctx.db.patch(pending._id, {
+          status: "completado",
+          completedAt: now,
+          completedBy: user._id,
+          resolution: "cancelado",
+          closureReason: `cierre por cambio de etapa a ${newStage}`,
+        });
+      }
+    }
+
+    await recordTimelineEvent(ctx, {
+      prospectId: id,
+      at: now,
+      type: "cambio-etapa",
+      actorId: user._id,
+      fromStage,
+      toStage: newStage,
     });
 
     const existingSale = await ctx.db.query("sales").withIndex("by_prospect", (q) => q.eq("prospectId", id)).first();
     if (newStage === "ganado") {
-      const saleFields = { prospectId: id, amount, product: product.trim(), closedAt: Date.now(), closedBy: user._id };
+      const saleFields = { prospectId: id, amount, product: product.trim(), closedAt: now, closedBy: user._id };
+      let saleId;
       if (existingSale) {
         await ctx.db.patch(existingSale._id, saleFields);
+        saleId = existingSale._id;
       } else {
-        await ctx.db.insert("sales", saleFields);
+        saleId = await ctx.db.insert("sales", saleFields);
       }
+      await recordTimelineEvent(ctx, { prospectId: id, at: now, type: "venta", actorId: user._id, saleId });
     } else if (existingSale) {
       await ctx.db.delete(existingSale._id);
     }
