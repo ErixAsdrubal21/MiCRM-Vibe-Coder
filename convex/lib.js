@@ -12,12 +12,19 @@ export function daysSince(ms) {
   return Math.max(0, Math.floor((Date.now() - ms) / (1000 * 60 * 60 * 24)));
 }
 
-/** Última interacción del prospecto, o `fallback` (normalmente _creationTime) si no tiene ninguna. */
+/**
+ * `at` de la última interacción NO borrada del prospecto, o `fallback`
+ * (normalmente `_creationTime`) si no tiene ninguna. Ordena por `at` —no por
+ * `_creationTime`— porque ICS-79 permite interacciones retroactivas: la más
+ * reciente por fecha de contacto puede no ser la última creada. Excluye las
+ * que tienen `deletedAt` (ICS-79).
+ */
 export async function lastContactAt(ctx, prospectId, fallback) {
   const last = await ctx.db
     .query("interactions")
-    .withIndex("by_prospect", (q) => q.eq("prospectId", prospectId))
+    .withIndex("by_prospect_and_at", (q) => q.eq("prospectId", prospectId))
     .order("desc")
+    .filter((q) => q.eq(q.field("deletedAt"), undefined))
     .first();
   return last ? last.at : fallback;
 }
