@@ -22,12 +22,15 @@ export default function TareasDelDia() {
   const [completingId, setCompletingId] = useState(null);
   const [error, setError] = useState("");
 
-  async function handleComplete(prospectId, e) {
+  // ICS-80: `complete` opera por id de seguimiento y con una resolución. Desde
+  // aquí el check rápido = "hecho"; reprogramar / no-contactado / cancelar se
+  // eligen desde la ficha del cliente (ICS-86).
+  async function handleComplete(followUpId, e) {
     e.stopPropagation();
     setError("");
-    setCompletingId(prospectId);
+    setCompletingId(followUpId);
     try {
-      await completeFollowUp({ prospectId });
+      await completeFollowUp({ id: followUpId, resolution: "hecho" });
     } catch (err) {
       setError(err.message ?? "No se pudo completar la tarea.");
     } finally {
@@ -77,8 +80,8 @@ export default function TareasDelDia() {
               <IconButton
                 icon="check"
                 label="Marcar como realizada"
-                disabled={completingId === prospect._id}
-                onClick={(e) => handleComplete(prospect._id, e)}
+                disabled={completingId === nextFollowUp._id}
+                onClick={(e) => handleComplete(nextFollowUp._id, e)}
               />
             )}
           </div>

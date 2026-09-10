@@ -1,8 +1,8 @@
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
-import { recordTimelineEvent } from "./lib";
+import { recordTimelineEvent, syncPendingFollowUpOwner } from "./lib";
 
-const SMOKE_PREFIXES = ["[SMOKE ICS-92]", "[SMOKE ICS-85]", "[SMOKE ICS-79]"];
+const SMOKE_PREFIXES = ["[SMOKE ICS-92]", "[SMOKE ICS-85]", "[SMOKE ICS-79]", "[SMOKE ICS-80]"];
 
 /** Rechaza cualquier id cuyo prospecto no sea de prueba (o no exista). */
 async function requireSmokeProspect(ctx, id) {
@@ -143,5 +143,44 @@ export const seedTimelineForSmoke = internalMutation({
       visibleInteractionEvents: interactionIds.length - 1,
       totalEvents: interactionIds.length + 3,
     };
+  },
+});
+
+/** Todas las interacciones y seguimientos de un prospecto de prueba (incluye borrados/completados). */
+export const dumpProspectForSmoke = internalQuery({
+  args: { prospectId: v.id("prospects") },
+  handler: async (ctx, { prospectId }) => {
+    const prospect = await ctx.db.get(prospectId);
+    if (!prospect || !SMOKE_PREFIXES.some((p) => prospect.name.startsWith(p))) {
+      throw new Error("No es un prospecto de prueba.");
+    }
+    const [interactions, followUps, sales, timelineEvents] = await Promise.all([
+      ctx.db.query("interactions").withIndex("by_prospect", (q) => q.eq("prospectId", prospectId)).collect(),
+      ctx.db.query("followUps").withIndex("by_prospect", (q) => q.eq("prospectId", prospectId)).collect(),
+      ctx.db.query("sales").withIndex("by_prospect", (q) => q.eq("prospectId", prospectId)).collect(),
+      ctx.db.query("timelineEvents").withIndex("by_prospect_and_at", (q) => q.eq("prospectId", prospectId)).collect(),
+    ]);
+    return { interactions, followUps, sales, timelineEvents };
+  },
+});
+
+/**
+ * ICS-80 — no existe (aún) una mutation de reasignación de cartera. Este
+ * helper simula lo que esa mutation debería hacer: cambiar `prospect.ownerId`
+ * y, en el mismo paso, llamar a `syncPendingFollowUpOwner` para que el
+ * seguimiento pendiente siga al nuevo dueño. Solo prospectos de prueba.
+ */
+export const reassignProspectForSmoke = internalMutation({
+  args: { prospectId: v.id("prospects"), newOwnerId: v.id("users") },
+  handler: async (ctx, { prospectId, newOwnerId }) => {
+    await requireSmokeProspect(ctx, prospectId);
+    await ctx.db.patch(prospectId, { ownerId: newOwnerId });
+    await syncPendingFollowUpOwner(ctx, prospectId, newOwnerId);
+    const pending = await ctx.db
+      .query("followUps")
+      .withIndex("by_prospect", (q) => q.eq("prospectId", prospectId))
+      .filter((q) => q.eq(q.field("status"), "pendiente"))
+      .first();
+    return { pendingFollowUpOwnerId: pending?.ownerId ?? null };
   },
 });

@@ -85,9 +85,19 @@ export const add = mutation({
       interactionId,
     });
 
+    // ICS-80: el cierre implícito del pendiente al registrar una interacción se
+    // vuelve explícito (resolución "hecho" + enlace a esta interacción). No
+    // genera un evento `cierre-seguimiento` adicional — el evento `interaccion`
+    // de arriba ya cuenta la historia (evitar duplicados en la línea de tiempo).
     const existing = await pendingFollowUp(ctx, prospectId);
     if (existing) {
-      await ctx.db.patch(existing._id, { status: "completado" });
+      await ctx.db.patch(existing._id, {
+        status: "completado",
+        completedAt: interactionAt,
+        completedBy: user._id,
+        resolution: "hecho",
+        completedByInteractionId: interactionId,
+      });
     }
     if (nextFollowUp) {
       const followUpId = await ctx.db.insert("followUps", {
