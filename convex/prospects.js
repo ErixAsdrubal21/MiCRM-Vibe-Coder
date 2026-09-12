@@ -63,6 +63,7 @@ export const get = query({
     const interactions = await ctx.db
       .query("interactions")
       .withIndex("by_prospect", (q) => q.eq("prospectId", id))
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .collect();
     const nextFollowUp = await pendingFollowUp(ctx, id);
     const sale =
