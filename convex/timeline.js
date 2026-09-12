@@ -2,6 +2,7 @@ import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireAuthenticatedUser } from "./permissions";
+import { hydrateByIds } from "./pagination";
 
 /**
  * ICS-85 — línea de tiempo de la relación para la ficha (ICS-86).
@@ -16,18 +17,6 @@ import { requireAuthenticatedUser } from "./permissions";
  * documento UNA sola vez a un `Map`. El costo por página es O(tamaño de
  * página), no O(página × entidades).
  */
-
-/** Lee cada id de `ids` una sola vez; devuelve un Map id → documento (sin los que no existen). */
-async function byId(ctx, ids) {
-  const map = new Map();
-  await Promise.all(
-    [...ids].map(async (id) => {
-      const doc = await ctx.db.get(id);
-      if (doc) map.set(id, doc);
-    }),
-  );
-  return map;
-}
 
 const nameOf = (users, id) => (id && users.get(id)?.name) || null;
 
@@ -55,9 +44,9 @@ export const listByProspect = query({
     }
 
     const [interactions, followUps, sales] = await Promise.all([
-      byId(ctx, interactionIds),
-      byId(ctx, followUpIds),
-      byId(ctx, saleIds),
+      hydrateByIds(ctx, interactionIds),
+      hydrateByIds(ctx, followUpIds),
+      hydrateByIds(ctx, saleIds),
     ]);
 
     // 2ª pasada: usuarios referidos por las entidades ya resueltas
@@ -69,7 +58,7 @@ export const listByProspect = query({
     for (const followUp of followUps.values()) {
       if (followUp.completedBy) userIds.add(followUp.completedBy);
     }
-    const users = await byId(ctx, userIds);
+    const users = await hydrateByIds(ctx, userIds);
 
     const page = [];
     for (const event of result.page) {
