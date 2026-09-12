@@ -10,9 +10,7 @@ import { Tag } from "@/design/components/core/Tag.jsx";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Icon } from "@/design/components/core/Icon.jsx";
 import { useSession } from "@/lib/session.js";
-import { contactTypeLabel } from "@/lib/prospects.js";
-
-const CONTACT_ICON = { llamada: "phone", whatsapp: "message-circle", visita: "map-pin", email: "mail", otro: "circle" };
+import { contactTypeLabel, CONTACT_ICON } from "@/lib/prospects.js";
 
 export default function TareasDelDia() {
   const session = useSession();

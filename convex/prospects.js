@@ -73,24 +73,26 @@ export const pipeline = query({
   },
 });
 
-/** ICS-12 Ficha: un prospecto + sus interactions + su followUp pendiente + su venta (si está Ganado). */
+/**
+ * ICS-12 Ficha: un prospecto + su followUp pendiente + su venta (si está Ganado).
+ *
+ * ICS-86: ya NO devuelve el array completo `interactions` — la ficha muestra
+ * el historial vía `timeline.listByProspect` (ICS-85), paginado. Cargarlo
+ * completo aquí recreaba justo el problema que ICS-81/85 resuelven para el
+ * resto del CRM (un array sin límite que crece para siempre).
+ */
 export const get = query({
   args: { id: v.id("prospects") },
   handler: async (ctx, { id }) => {
     await requireAuthenticatedUser(ctx);
     const prospect = await ctx.db.get(id);
     if (!prospect) return null;
-    const interactions = await ctx.db
-      .query("interactions")
-      .withIndex("by_prospect", (q) => q.eq("prospectId", id))
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .collect();
     const nextFollowUp = await pendingFollowUp(ctx, id);
     const sale =
       prospect.stage === "ganado"
         ? await ctx.db.query("sales").withIndex("by_prospect", (q) => q.eq("prospectId", id)).first()
         : null;
-    return { ...prospect, interactions, nextFollowUp, sale };
+    return { ...prospect, nextFollowUp, sale };
   },
 });
 
