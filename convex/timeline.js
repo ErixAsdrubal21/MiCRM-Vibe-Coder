@@ -112,6 +112,7 @@ export const listByProspect = query({
 
       if (event.type === "cierre-seguimiento") {
         const followUp = followUps.get(event.followUpId);
+        const closureInteraction = event.interactionId ? interactions.get(event.interactionId) : null;
         page.push({
           ...base,
           followUpClosure: followUp
@@ -121,6 +122,9 @@ export const listByProspect = query({
                 resolution: followUp.resolution ?? null,
                 closureReason: followUp.closureReason ?? null,
                 completedByName: nameOf(users, followUp.completedBy),
+                // Nota real que el vendedor escribió al cerrar (o la de por
+                // defecto). No se muestra si la interacción quedó borrada.
+                note: closureInteraction && !closureInteraction.deletedAt ? closureInteraction.note : null,
               }
             : null,
         });

@@ -9,74 +9,130 @@ import {
   businessToday,
   calendarDateToMs,
   isValidCalendarDate,
+  endOfBusinessTodayMs,
+  recordTimelineEvent,
 } from "./lib";
-import { followUpType } from "./validators.js";
-
-function isDueTodayOrOverdue(followUp) {
-  if (!followUp) return false;
-  const target = new Date(followUp.at);
-  const today = new Date();
-  return target.toDateString() === today.toDateString() || target < today;
-}
+import { contactType, followUpType, resolution } from "./validators.js";
 
 /**
- * ICS-19: home de Carlos. Intencionalmente más amplio que "solo followUps
- * pendientes vencidos o de hoy" — también debe mostrar prospectos activos
- * SIN ningún seguimiento programado pero con más de 3 días sin contacto
- * ("prospectos en riesgo"), igual que el comportamiento ya validado en
- * mi-crm. Por eso primero se filtra a etapas activas (conjunto reducido) y
- * solo ahí se calcula el resto — el costo cae en los prospectos activos, no
- * en todo el CRM.
+ * ICS-19 + ICS-80: home de Carlos — los seguimientos pendientes vencidos o de
+ * hoy. Se leen por el índice `by_status_and_date` (pendientes con `at` antes
+ * del fin de hoy en la zona del negocio) — sin `.collect()` de `prospects`.
+ *
+ * Para cada uno se calcula `daysSinceContact` (última interacción no borrada)
+ * y se marca `atRisk` si pasa de 3 días. COSTO ACEPTADO (ICS-80): esta query
+ * ya NO cubre "prospecto activo SIN ningún seguimiento y con días sin
+ * contacto" — eso exigía recorrer toda la tabla de prospectos. Ese caso lo
+ * cubren la alerta de riesgo del dashboard (ICS-87) y `/actividad` (ICS-88).
  */
 export const today = query({
   args: {},
   handler: async (ctx) => {
     await requireAuthenticatedUser(ctx);
-    const prospects = await ctx.db.query("prospects").collect();
-    const active = prospects.filter((p) => isActiveStage(p.stage));
+    const cutoff = endOfBusinessTodayMs();
 
-    const enriched = await Promise.all(
-      active.map(async (p) => {
-        const followUp = await pendingFollowUp(ctx, p._id);
-        const lastAt = await lastContactAt(ctx, p._id, p._creationTime);
-        return { prospect: p, followUp, daysSinceContact: daysSince(lastAt) };
-      })
+    const pending = await ctx.db
+      .query("followUps")
+      .withIndex("by_status_and_date", (q) => q.eq("status", "pendiente").lt("at", cutoff))
+      .collect();
+
+    const rows = await Promise.all(
+      pending.map(async (followUp) => {
+        const prospect = await ctx.db.get(followUp.prospectId);
+        if (!prospect) return null;
+        const lastAt = await lastContactAt(ctx, prospect._id, prospect._creationTime);
+        const daysSinceContact = daysSince(lastAt);
+        return {
+          prospect: { _id: prospect._id, name: prospect.name, stage: prospect.stage },
+          nextFollowUp: followUp,
+          daysSinceContact,
+          atRisk: daysSinceContact > 3,
+        };
+      }),
     );
 
-    return enriched
-      .filter(({ followUp, daysSinceContact }) => isDueTodayOrOverdue(followUp) || daysSinceContact > 3)
-      .map(({ prospect, followUp, daysSinceContact }) => ({
-        prospect: { _id: prospect._id, name: prospect.name, stage: prospect.stage },
-        nextFollowUp: followUp,
-        daysSinceContact,
-        atRisk: daysSinceContact > 3,
-      }))
-      .sort((a, b) => b.daysSinceContact - a.daysSinceContact);
+    return rows.filter(Boolean).sort((a, b) => b.daysSinceContact - a.daysSinceContact);
   },
 });
 
-/** ICS-19: completar tarea = registrar interacción automática + liberar el seguimiento pendiente. */
-export const complete = mutation({
-  args: { prospectId: v.id("prospects") },
-  handler: async (ctx, { prospectId }) => {
-    const user = await requireVendedor(ctx);
-    await requireProspect(ctx, prospectId);
+const DEFAULT_CLOSURE_NOTE = {
+  hecho: "Seguimiento realizado",
+  "no-contactado": "No se logró contactar",
+  reprogramado: "Seguimiento reprogramado",
+  cancelado: "Seguimiento cancelado",
+};
 
-    const followUp = await pendingFollowUp(ctx, prospectId);
-    if (!followUp) {
-      throw new Error("No hay ningún seguimiento pendiente para este prospecto.");
+/**
+ * ICS-80: cerrar un seguimiento explícitamente, POR ID y con una resolución.
+ * Deja rastro completo:
+ *  - `patch` del follow-up: `status`, `completedAt`, `completedBy`, `resolution`.
+ *  - una interacción automática (`source: "follow-up"`) con la nota real del
+ *    usuario o la de por defecto según la resolución; enlazada en ambos
+ *    sentidos (`interaction.followUpId` / `followUp.completedByInteractionId`).
+ *  - si `resolution === "reprogramado"`: un nuevo follow-up `pendiente` con
+ *    `ownerId` del prospecto, enlazado en `interaction.nextFollowUpId`.
+ *  - un evento `cierre-seguimiento` en la línea de tiempo (ICS-85), con el
+ *    `interactionId` de la nota de cierre.
+ */
+export const complete = mutation({
+  args: {
+    id: v.id("followUps"),
+    resolution,
+    note: v.optional(v.string()),
+    type: v.optional(contactType),
+    nextFollowUp: v.optional(v.object({ at: v.number(), type: followUpType })),
+  },
+  handler: async (ctx, { id, resolution: res, note, type, nextFollowUp }) => {
+    const user = await requireVendedor(ctx);
+    const followUp = await ctx.db.get(id);
+    if (!followUp) throw new Error("Seguimiento no encontrado.");
+    const prospect = await requireProspect(ctx, followUp.prospectId);
+    if (followUp.status !== "pendiente") throw new Error("El seguimiento ya fue cerrado.");
+    if (res === "reprogramado" && !nextFollowUp) {
+      throw new Error("Para reprogramar el seguimiento necesitas indicar la nueva fecha.");
     }
 
-    await ctx.db.patch(followUp._id, { status: "completado" });
-    await ctx.db.insert("interactions", {
-      prospectId,
-      at: Date.now(),
-      type: followUp.type,
-      note: "Marcado como completado desde Tareas del día.",
-      registeredBy: user._id,
+    const now = Date.now();
+    await ctx.db.patch(id, {
+      status: "completado",
+      completedAt: now,
+      completedBy: user._id,
+      resolution: res,
     });
 
-    return ctx.db.get(prospectId);
+    const interactionNote = note && note.trim() !== "" ? note : DEFAULT_CLOSURE_NOTE[res];
+    const interactionId = await ctx.db.insert("interactions", {
+      prospectId: followUp.prospectId,
+      at: now,
+      type: type ?? followUp.type,
+      note: interactionNote,
+      registeredBy: user._id,
+      source: "follow-up",
+      followUpId: id,
+    });
+    await ctx.db.patch(id, { completedByInteractionId: interactionId });
+
+    if (res === "reprogramado") {
+      const nextId = await ctx.db.insert("followUps", {
+        prospectId: followUp.prospectId,
+        at: nextFollowUp.at,
+        type: nextFollowUp.type,
+        status: "pendiente",
+        ownerId: prospect.ownerId,
+      });
+      await ctx.db.patch(interactionId, { nextFollowUpId: nextId });
+    }
+
+    await recordTimelineEvent(ctx, {
+      prospectId: followUp.prospectId,
+      at: now,
+      type: "cierre-seguimiento",
+      actorId: user._id,
+      followUpId: id,
+      interactionId,
+    });
+
+    return ctx.db.get(followUp.prospectId);
   },
 });
 

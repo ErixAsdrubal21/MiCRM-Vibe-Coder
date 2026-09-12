@@ -150,3 +150,15 @@ export function calendarDateToMs(dateStr) {
 export function msToBusinessDate(ms) {
   return bizDayFmt.format(new Date(ms));
 }
+
+/**
+ * Instante (exclusivo) en que termina "hoy" en la zona del negocio: la
+ * medianoche del día siguiente en México (UTC-6 fijo, sin DST desde 2022).
+ * Lo usa `followUps.today` (ICS-80) como cota superior del índice
+ * `by_status_and_date` — "vencido o para hoy" = `followUp.at < este valor` —
+ * sin escanear la tabla `prospects`.
+ */
+export function endOfBusinessTodayMs() {
+  const tomorrow = msToBusinessDate(calendarDateToMs(businessToday()) + 24 * 60 * 60 * 1000);
+  return Date.parse(`${tomorrow}T00:00:00-06:00`);
+}
