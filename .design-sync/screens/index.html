@@ -1,0 +1,101 @@
+<!-- @dsCard group="CRM App" viewport="390x780" name="App CRM (click-through) — 11 pantallas" subtitle="Login, Tareas, Dashboard, Prospectos, Ficha, Nuevo prospecto, Registrar interacción, Pipeline, Reportes, Mi desempeño, Configuración" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mi Negocio CRM — UI Kit</title>
+<link rel="stylesheet" href="../../styles.css">
+<link rel="stylesheet" href="shell.css">
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--color-stage-nuevo-tint, #E4E9EC); display: flex; align-items: center; justify-content: center; }
+  #phone {
+    width: 390px; height: 780px;
+    background: var(--color-canvas);
+    border-radius: 36px;
+    box-shadow: 0 24px 60px rgba(34,28,22,0.28);
+    overflow: hidden;
+    position: relative;
+  }
+  #root { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+</style>
+</head>
+<body>
+  <div style="position: relative;">
+    <div id="phone"><div id="root"></div></div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="Shell.jsx"></script>
+  <script type="text/babel" src="Placeholder.jsx"></script>
+  <script type="text/babel" src="Login.jsx"></script>
+  <script type="text/babel" src="Tareas.jsx"></script>
+  <script type="text/babel" src="Dashboard.jsx"></script>
+  <script type="text/babel" src="ProspectosList.jsx"></script>
+  <script type="text/babel" src="Ficha.jsx"></script>
+  <script type="text/babel" src="NuevoProspecto.jsx"></script>
+  <script type="text/babel" src="RegistrarInteraccion.jsx"></script>
+  <script type="text/babel" src="Pipeline.jsx"></script>
+  <script type="text/babel" src="Reportes.jsx"></script>
+  <script type="text/babel" src="MiDesempeno.jsx"></script>
+  <script type="text/babel" src="Configuracion.jsx"></script>
+  <script type="text/babel">
+    // Flujo real de Carlos: Tareas (inicio) -> toca una tarea -> Ficha ->
+    // "Registrar interacción". FAB "+" -> Nuevo prospecto.
+    // Flujo real de Marta: Dashboard -> alerta/KPI de riesgo -> Prospectos
+    // (filtrado) -> Ficha; o Pipeline -> Ficha.
+    function App() {
+      const [role, setRole] = React.useState(null);
+      const [screen, setScreen] = React.useState('tareas');
+      const [prospectId, setProspectId] = React.useState(null);
+      const [riskFilter, setRiskFilter] = React.useState(false);
+
+      function enter(r) {
+        setRole(r);
+        setScreen(r === 'vendedor' ? 'tareas' : 'dashboard');
+      }
+      function logout() { setRole(null); }
+      function openProspect(id) { setProspectId(id); setScreen('ficha'); }
+      function goToRiesgo() { setRiskFilter(true); setScreen('prospectos'); }
+
+      if (!role) return <Login onEnter={enter} />;
+
+      let body;
+      if (screen === 'nuevo-prospecto') {
+        body = <NuevoProspecto onClose={() => setScreen('tareas')} onSaved={() => setScreen('tareas')} />;
+      } else if (screen === 'registrar-interaccion') {
+        body = <RegistrarInteraccion prospectId={prospectId} onClose={() => setScreen('ficha')} onSaved={() => setScreen('ficha')} />;
+      } else if (screen === 'ficha') {
+        body = <Ficha role={role} prospectId={prospectId} onBack={() => setScreen(role === 'vendedor' ? 'tareas' : 'prospectos')}
+          onRegistrarInteraccion={(id) => { setProspectId(id); setScreen('registrar-interaccion'); }} />;
+      } else if (screen === 'tareas') {
+        body = <Tareas onOpenProspect={openProspect} />;
+      } else if (screen === 'dashboard') {
+        body = <Dashboard onGoToRiesgo={goToRiesgo} />;
+      } else if (screen === 'prospectos') {
+        body = <ProspectosList initialRiskFilter={riskFilter} onOpenProspect={openProspect} />;
+      } else if (screen === 'pipeline') {
+        body = <Pipeline role={role} onOpenProspect={openProspect} />;
+      } else if (screen === 'mi-desempeno') {
+        body = <MiDesempeno />;
+      } else if (screen === 'reportes') {
+        body = <Reportes />;
+      } else if (screen === 'configuracion') {
+        body = <Configuracion role={role} />;
+      }
+
+      return (
+        <Shell role={role} active={screen} onNavigate={(s) => { setRiskFilter(false); setScreen(s); }} onLogout={logout}>
+          {body}
+        </Shell>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
