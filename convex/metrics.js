@@ -2,7 +2,7 @@ import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireVendedor, requireAdministrador } from "./permissions";
 import { isActiveStage, daysSince, lastContactAt } from "./lib";
-import { LOSS_REASON_VALUES } from "../shared/crmEnums.js";
+import { LOSS_REASON_VALUES, OPPORTUNITY_OPEN_STAGES, OPPORTUNITY_STAGE_VALUES, STAGE_PROBABILITY } from "../shared/crmEnums.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PERIOD_DAYS = { semana: 7, mes: 30 };
@@ -34,8 +34,45 @@ function statsFor(ownedProspectIds, interactions, sales, start, end) {
       .map((i) => i.prospectId)
   );
   const atendidos = atendidosIds.size;
-  const ventas = sales.filter((s) => s.closedAt >= start && s.closedAt < end && ownedProspectIds.has(s.prospectId)).length;
+  // ICS-105: una venta anulada no cuenta como venta cerrada para conversión.
+  const ventas = sales.filter((s) => !s.voidedAt && s.closedAt >= start && s.closedAt < end && ownedProspectIds.has(s.prospectId)).length;
   return { atendidos, ventas, tasaConversion: conversionRate(ventas, atendidos) };
+}
+
+/**
+ * ICS-105 — bloque de oportunidades (pipeline/forecast/conversión/ticket),
+ * compartido por `dashboard`, `myPerformance` y `reportes`. Deliberadamente
+ * NO toca nada de actividad/cumplimiento de seguimiento (ICS-87/89, todavía
+ * sin implementar) — es un bloque aditivo en los mismos archivos, no un
+ * reemplazo; no debería chocar cuando esas dos issues se hagan después.
+ *
+ * `estimatedAmount` ausente ("monto pendiente", ICS-98 B1) se excluye del
+ * valor de pipeline y del forecast, y se cuenta aparte en `pendingCount`.
+ */
+function pipelineStats(opportunities) {
+  const open = opportunities.filter((o) => OPPORTUNITY_OPEN_STAGES.includes(o.stage));
+  const withAmount = open.filter((o) => o.estimatedAmount != null);
+  const pipelineValue = withAmount.reduce((sum, o) => sum + o.estimatedAmount, 0);
+  const forecast = Math.round(withAmount.reduce((sum, o) => sum + o.estimatedAmount * (STAGE_PROBABILITY[o.stage] / 100), 0));
+  return { pipelineValue, forecast, pendingCount: open.length - withAmount.length, openCount: open.length };
+}
+
+/** Ganadas / (ganadas + perdidas) CERRADAS en la ventana. Una ganada con venta anulada sigue contando ganada (B3, no depende de `sales` en absoluto). */
+function opportunityConversion(opportunities, start, end) {
+  const closed = opportunities.filter((o) => (o.stage === "ganada" || o.stage === "perdida") && o.closedAt != null && o.closedAt >= start && o.closedAt < end);
+  const won = closed.filter((o) => o.stage === "ganada").length;
+  return { won, lost: closed.length - won, rate: conversionRate(won, closed.length) };
+}
+
+/** Σ `amount` de ventas NO anuladas / nº de esas ventas, en la ventana. 0 si no hay ninguna (evita NaN). */
+function avgTicket(sales, start, end) {
+  const inRange = sales.filter((s) => !s.voidedAt && s.closedAt >= start && s.closedAt < end);
+  if (inRange.length === 0) return 0;
+  return Math.round(inRange.reduce((sum, s) => sum + s.amount, 0) / inRange.length);
+}
+
+function opportunityFunnel(opportunities) {
+  return OPPORTUNITY_STAGE_VALUES.map((stage) => ({ stage, count: opportunities.filter((o) => o.stage === stage).length }));
 }
 
 /**
@@ -61,7 +98,7 @@ export const myPerformance = query({
     const now = Date.now();
     const { currentStart, previousStart, previousEnd } = windowBounds(period, now);
 
-    const [prospects, interactions, sales] = await Promise.all([
+    const [prospects, interactions, sales, opportunities] = await Promise.all([
       ctx.db.query("prospects").withIndex("by_owner", (q) => q.eq("ownerId", user._id)).collect(),
       ctx.db
         .query("interactions")
@@ -71,12 +108,22 @@ export const myPerformance = query({
         .query("sales")
         .withIndex("by_closedBy", (q) => q.eq("closedBy", user._id).gte("closedAt", previousStart))
         .collect(),
+      // ICS-105 — pipeline propio: todas las oportunidades de este vendedor
+      // (abiertas para pipeline/forecast, cerradas para la conversión).
+      ctx.db.query("opportunities").withIndex("by_owner_and_stage", (q) => q.eq("ownerId", user._id)).collect(),
     ]);
     const ownedProspectIds = new Set(prospects.map((p) => p._id));
 
     return {
       current: statsFor(ownedProspectIds, interactions, sales, currentStart, now + 1),
       previous: statsFor(ownedProspectIds, interactions, sales, previousStart, previousEnd),
+      oportunidades: {
+        ...pipelineStats(opportunities),
+        conversion: {
+          current: opportunityConversion(opportunities, currentStart, now + 1),
+          previous: opportunityConversion(opportunities, previousStart, previousEnd),
+        },
+      },
     };
   },
 });
@@ -168,17 +215,25 @@ export const dashboard = query({
     const week = windowBounds("semana", now);
     const month = windowBounds("mes", now);
 
-    const [prospects, sales, followUps, users] = await Promise.all([
+    const [prospects, sales, followUps, users, opportunities] = await Promise.all([
       ctx.db.query("prospects").collect(),
       ctx.db.query("sales").collect(),
       ctx.db.query("followUps").collect(),
       ctx.db.query("users").collect(),
+      // ICS-105 — pipeline global. Un `.collect()` de toda la tabla, igual
+      // que `prospects`/`sales` arriba: es un agregado ejecutivo de admin, no
+      // un feed paginado (el CRM es de escala de un negocio pequeño).
+      ctx.db.query("opportunities").collect(),
     ]);
+
+    // ICS-105: una venta anulada no cuenta como ingreso — se excluye aquí,
+    // una sola vez, antes de cualquier suma/conteo de `sales`.
+    const activeSales = sales.filter((s) => !s.voidedAt);
 
     const active = prospects.filter((p) => isActiveStage(p.stage));
     const newThisMonth = prospects.filter((p) => inWindow(p._creationTime, month.currentStart, now)).length;
-    const salesThisWeek = sales.filter((s) => inWindow(s.closedAt, week.currentStart, now)).length;
-    const salesThisMonth = sales.filter((s) => inWindow(s.closedAt, month.currentStart, now)).length;
+    const salesThisWeek = activeSales.filter((s) => inWindow(s.closedAt, week.currentStart, now)).length;
+    const salesThisMonth = activeSales.filter((s) => inWindow(s.closedAt, month.currentStart, now)).length;
     const vendedores = users.filter((u) => u.role === "vendedor");
 
     const [atRiskCount, { carlos, todayTasks }] = await Promise.all([
@@ -194,6 +249,11 @@ export const dashboard = query({
       atRiskCount,
       tasksToday: todayTasks,
       carlos,
+      oportunidades: {
+        ...pipelineStats(opportunities),
+        conversionThisMonth: opportunityConversion(opportunities, month.currentStart, now + 1).rate,
+        avgTicketThisMonth: avgTicket(activeSales, month.currentStart, now + 1),
+      },
     };
   },
 });
@@ -212,14 +272,18 @@ export const reportes = query({
     const now = Date.now();
     const { currentStart } = windowBounds(period, now);
 
-    const [prospects, sales] = await Promise.all([
+    const [prospects, sales, opportunities] = await Promise.all([
       ctx.db.query("prospects").collect(),
       ctx.db.query("sales").collect(),
+      ctx.db.query("opportunities").collect(),
     ]);
     const nameById = new Map(prospects.map((p) => [p._id, p.name]));
 
+    // ICS-105: una venta anulada no es ingreso — se excluye de "Ventas" antes
+    // de cualquier suma/conteo (el detalle expandible tampoco la muestra).
+    const activeSales = sales.filter((s) => !s.voidedAt);
     const nuevos = prospects.filter((p) => inWindow(p._creationTime, currentStart, now));
-    const ventasPeriodo = sales.filter((s) => inWindow(s.closedAt, currentStart, now));
+    const ventasPeriodo = activeSales.filter((s) => inWindow(s.closedAt, currentStart, now));
     const perdidosPeriodo = prospects.filter((p) => p.stage === "perdido" && inWindow(p.stageChangedAt, currentStart, now));
 
     return {
@@ -238,6 +302,15 @@ export const reportes = query({
         detalle: perdidosPeriodo
           .map((p) => ({ prospectId: p._id, name: p.name, reason: p.lossReason, at: p.stageChangedAt }))
           .sort((a, b) => b.at - a.at),
+      },
+      // ICS-105 — bloque de oportunidades. El embudo (`funnel`) es una foto
+      // del estado actual, no del período (no tiene sentido "el embudo de la
+      // semana pasada"); conversión/ticket sí están acotados al período.
+      oportunidades: {
+        ...pipelineStats(opportunities),
+        funnel: opportunityFunnel(opportunities),
+        conversion: opportunityConversion(opportunities, currentStart, now + 1),
+        avgTicket: avgTicket(activeSales, currentStart, now + 1),
       },
     };
   },

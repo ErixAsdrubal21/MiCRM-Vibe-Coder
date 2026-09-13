@@ -8,6 +8,10 @@ import { KpiTile } from "@/design/components/core/KpiTile.jsx";
 import { useSession } from "@/lib/session.js";
 import "./dashboard.css";
 
+function money(n) {
+  return `$${n.toLocaleString("es-MX")}`;
+}
+
 function weekRangeLabel() {
   const now = new Date();
   const day = now.getDay();
@@ -51,6 +55,23 @@ export default function Dashboard() {
               <KpiTile value={data.atRiskCount} label="Sin seguimiento" warn={data.atRiskCount > 0} />
             </Link>
             <KpiTile value={`${data.tasksToday.completadas}/${data.tasksToday.total}`} label={`Tareas de ${data.carlos?.name ?? "el vendedor"} hoy`} />
+          </div>
+
+          {/* ICS-105 — pipeline/forecast de oportunidades (bloque de actividad/
+              cumplimiento de ICS-87 sigue pendiente, sin tocar aquí). */}
+          <p className="section-label">Oportunidades</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Link href="/ventas" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+              <KpiTile value={money(data.oportunidades.pipelineValue)} label="Valor de pipeline" />
+            </Link>
+            <KpiTile value={money(data.oportunidades.forecast)} label="Forecast ponderado" />
+            <KpiTile value={`${data.oportunidades.conversionThisMonth}%`} label="Conversión de oportunidades" />
+            <KpiTile value={money(data.oportunidades.avgTicketThisMonth)} label="Ticket promedio" />
+            {data.oportunidades.pendingCount > 0 && (
+              <Link href="/ventas" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+                <KpiTile value={data.oportunidades.pendingCount} label="Oportunidades sin monto" warn />
+              </Link>
+            )}
           </div>
 
           {data.carlos && (
