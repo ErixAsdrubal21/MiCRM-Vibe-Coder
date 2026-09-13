@@ -36,17 +36,20 @@ export const listByProspect = query({
     const interactionIds = new Set();
     const followUpIds = new Set();
     const saleIds = new Set();
+    const opportunityIds = new Set();
     for (const event of result.page) {
       if (event.actorId) userIds.add(event.actorId);
       if (event.interactionId) interactionIds.add(event.interactionId);
       if (event.followUpId) followUpIds.add(event.followUpId);
       if (event.saleId) saleIds.add(event.saleId);
+      if (event.opportunityId) opportunityIds.add(event.opportunityId);
     }
 
-    const [interactions, followUps, sales] = await Promise.all([
+    const [interactions, followUps, sales, opportunities] = await Promise.all([
       hydrateByIds(ctx, interactionIds),
       hydrateByIds(ctx, followUpIds),
       hydrateByIds(ctx, saleIds),
+      hydrateByIds(ctx, opportunityIds),
     ]);
 
     // 2ª pasada: usuarios referidos por las entidades ya resueltas
@@ -126,6 +129,32 @@ export const listByProspect = query({
           ...base,
           sale: sale
             ? { _id: sale._id, amount: sale.amount, product: sale.product, closedAt: sale.closedAt }
+            : null,
+        });
+        continue;
+      }
+
+      // ICS-106 — 3 tipos nuevos de ICS-99/101: oportunidad-ganada,
+      // oportunidad-perdida, venta-anulada. El evento `venta` original de
+      // arriba NO se toca cuando la venta se anula después (append-only: la
+      // anulación es un evento aparte, más adelante en el tiempo).
+      if (event.type === "oportunidad-ganada" || event.type === "oportunidad-perdida") {
+        const opportunity = opportunities.get(event.opportunityId);
+        page.push({
+          ...base,
+          opportunity: opportunity
+            ? { _id: opportunity._id, name: opportunity.name, product: opportunity.product, lossReason: opportunity.lossReason ?? null }
+            : null,
+        });
+        continue;
+      }
+
+      if (event.type === "venta-anulada") {
+        const sale = sales.get(event.saleId);
+        page.push({
+          ...base,
+          voidedSale: sale
+            ? { _id: sale._id, amount: sale.amount, product: sale.product, voidReason: sale.voidReason ?? null }
             : null,
         });
         continue;

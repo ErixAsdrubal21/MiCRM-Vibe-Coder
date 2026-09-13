@@ -11,7 +11,7 @@ import { Tag } from "@/design/components/core/Tag.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { useSession } from "@/lib/session.js";
 import { CHANNELS, CONTACT_TYPES, FOLLOW_UP_TYPES, CONTACT_ICON, STAGE_LABELS, LOSS_REASONS, contactTypeLabel, relativeFollowUpLabel } from "@/lib/prospects.js";
-import { OUTCOME_VALUES, OUTCOME_LABELS, RESOLUTION_LABELS, OPPORTUNITY_OPEN_STAGES } from "../../../../../shared/crmEnums.js";
+import { OUTCOME_VALUES, OUTCOME_LABELS, RESOLUTION_LABELS, OPPORTUNITY_OPEN_STAGES, LOSS_REASON_LABELS } from "../../../../../shared/crmEnums.js";
 import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
 import StageChangePicker from "@/components/StageChangePicker.js";
 import "./ficha.css";
@@ -668,10 +668,66 @@ function TimelineEvent({
         <div className="tl-item__body">
           <div className="tl-item__head">
             <p className="tl-item__title">
-              {event.sale ? <>Venta registrada: ${event.sale.amount.toLocaleString("es-MX")} · {event.sale.product}</> : "Venta registrada"}
+              {event.sale ? <>Venta registrada: {money(event.sale.amount)} · {event.sale.product}</> : "Venta registrada"}
             </p>
             <span className="tl-item__date">{formatEventDate(event.at)}</span>
           </div>
+          <div className="tl-item__meta"><span className="tl-item__author">{event.actorName ?? "—"}</span></div>
+        </div>
+      </div>
+    );
+  }
+
+  // ICS-106 — 3 tipos nuevos (ICS-99/101): oportunidad-ganada, oportunidad-perdida, venta-anulada.
+  if (event.type === "oportunidad-ganada") {
+    return (
+      <div className="tl-item">
+        <div className="tl-item__icon tl-item__icon--accent"><Icon name="trophy" size={16} /></div>
+        <div className="tl-item__body">
+          <div className="tl-item__head">
+            <p className="tl-item__title">
+              Oportunidad ganada{event.opportunity ? `: ${event.opportunity.name}` : ""}
+            </p>
+            <span className="tl-item__date">{formatEventDate(event.at)}</span>
+          </div>
+          <div className="tl-item__meta"><span className="tl-item__author">{event.actorName ?? "—"}</span></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (event.type === "oportunidad-perdida") {
+    return (
+      <div className="tl-item tl-item--muted">
+        <div className="tl-item__icon"><Icon name="x-circle" size={16} /></div>
+        <div className="tl-item__body">
+          <div className="tl-item__head">
+            <p className="tl-item__title">
+              Oportunidad perdida{event.opportunity ? `: ${event.opportunity.name}` : ""}
+            </p>
+            <span className="tl-item__date">{formatEventDate(event.at)}</span>
+          </div>
+          <div className="tl-item__meta">
+            <span className="tl-item__author">{event.actorName ?? "—"}</span>
+            {event.opportunity?.lossReason && <Tag variant="neutral">{LOSS_REASON_LABELS[event.opportunity.lossReason] ?? event.opportunity.lossReason}</Tag>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (event.type === "venta-anulada") {
+    return (
+      <div className="tl-item tl-item--muted">
+        <div className="tl-item__icon"><Icon name="ban" size={16} /></div>
+        <div className="tl-item__body">
+          <div className="tl-item__head">
+            <p className="tl-item__title">
+              {event.voidedSale ? <>Venta anulada: {money(event.voidedSale.amount)} · {event.voidedSale.product}</> : "Venta anulada"}
+            </p>
+            <span className="tl-item__date">{formatEventDate(event.at)}</span>
+          </div>
+          {event.voidedSale?.voidReason && <p className="tl-item__note">{event.voidedSale.voidReason}</p>}
           <div className="tl-item__meta"><span className="tl-item__author">{event.actorName ?? "—"}</span></div>
         </div>
       </div>
