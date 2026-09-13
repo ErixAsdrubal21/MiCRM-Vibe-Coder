@@ -1,0 +1,658 @@
+/* Generado para /design-sync — concatenación plana de tokens + componentes + forms. NO la usa la app (ver layout.js). */
+/**
+ * Fonts — Mi Negocio CRM
+ * Inter vía Google Fonts CDN. En entornos con CSP que bloquea CDNs de
+ * fuentes (p. ej. artifacts), usar el stack system-ui de --font-ui en
+ * typography.css como sustituto — no es una degradación silenciosa, es
+ * visualmente muy cercano a Inter y así se documenta en design.md.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+/**
+ * Colors — Mi Negocio CRM
+ * Reference lock: ver ../design.md. Acento único marigold reservado a CTA
+ * (Zapier + Nintendo + Pinterest). Etapas de pipeline y prioridad tienen
+ * hues fijos, distintos del acento — nunca reutilizar --color-accent-* para
+ * estado, ni un --color-stage-* o --color-priority-* para un CTA.
+ */
+
+:root {
+  /* Canvas / superficie — la diferencia crema→blanco ES la elevación (Pinterest) */
+  --color-canvas: #FBF7F1;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #F3EEE6;
+  --color-surface-container-high: #EDE6D9;
+  --color-hairline: #E7E0D3;
+
+  /* Texto */
+  --color-ink: #221C16;
+  --color-body: #5C564C;
+  --color-mute: #948C7E;
+  --color-inverse-surface: #362E24;
+  --color-inverse-on-surface: #FBF3E7;
+
+  /* Acento — CTA-only (Zapier: "reserva el color saturado para cada CTA primario") */
+  --color-accent: #E2680C;
+  --color-accent-pressed: #C2560A;
+  --color-accent-tint: #FBE4CE;
+  --color-on-accent: #FFFFFF;
+
+  /* Semántico — separado del acento (nunca es el mismo hue que --color-accent) */
+  --color-critical: #B23A2E;
+  --color-critical-tint: #F7DCD6;
+  --color-success: #2F7D5C;
+  --color-success-tint: #DCEFE4;
+  --color-focus-ring: #2F6FE0;
+
+  /* Etapas de pipeline — 6 fijas, siempre texto/ícono a color sobre fondo tint,
+     nunca fondo sólido saturado (regla heredada de la versión anterior del sistema) */
+  --color-stage-nuevo: #5B6B7A;
+  --color-stage-nuevo-tint: #E4E9EC;
+  --color-stage-contactado: #3E6E8E;
+  --color-stage-contactado-tint: #DCE8EE;
+  --color-stage-cotizacion: #8A6D3B;
+  --color-stage-cotizacion-tint: #F1E7D3;
+  --color-stage-negociacion: #6D4C9C;
+  --color-stage-negociacion-tint: #EAE1F5;
+  --color-stage-ganado: #2F7D5C; /* = --color-success */
+  --color-stage-ganado-tint: #DCEFE4;
+  --color-stage-perdido: #8A8377;
+  --color-stage-perdido-tint: #EDEAE2;
+
+  /* Prioridad (pendiente de confirmación de producto — ver Caveats en design.md).
+     priority-alta reutiliza --color-critical a propósito: para Carlos, una
+     prioridad alta y un riesgo activo son la misma urgencia. */
+  --color-priority-alta: #B23A2E;
+  --color-priority-media: #C79A3B;
+  --color-priority-baja: #948C7E;
+
+  color-scheme: light;
+}
+
+/* Preferencia de SO — se puede sobreescribir en ambas direcciones con data-theme (ver bloques abajo) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-canvas: #17130F;
+    --color-surface: #221C16;
+    --color-surface-sunken: #1D1712;
+    --color-surface-container-high: #29221A;
+    --color-hairline: #362E24;
+    --color-ink: #F4EFE6;
+    --color-body: #C9C0B2;
+    --color-mute: #8B8376;
+    --color-inverse-surface: #F4EFE6;
+    --color-inverse-on-surface: #221C16;
+    --color-accent: #F3812A;
+    --color-accent-pressed: #FF9A4D;
+    --color-accent-tint: #402A15;
+    --color-on-accent: #1D1208;
+    --color-critical: #E2685A;
+    --color-critical-tint: #3D211D;
+    --color-success: #4FAE84;
+    --color-success-tint: #17332A;
+    --color-focus-ring: #6C97F5;
+    --color-stage-nuevo: #8FA3B4;
+    --color-stage-nuevo-tint: #26333D;
+    --color-stage-contactado: #7FB0CE;
+    --color-stage-contactado-tint: #1E2E38;
+    --color-stage-cotizacion: #D3A968;
+    --color-stage-cotizacion-tint: #3A2E1B;
+    --color-stage-negociacion: #B79AE0;
+    --color-stage-negociacion-tint: #2E2440;
+    --color-stage-ganado: #4FAE84;
+    --color-stage-ganado-tint: #17332A;
+    --color-stage-perdido: #A39C8E;
+    --color-stage-perdido-tint: #2C2820;
+    --color-priority-alta: #E2685A;
+    --color-priority-media: #D9AE5C;
+    --color-priority-baja: #8B8376;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-canvas: #17130F;
+  --color-surface: #221C16;
+  --color-surface-sunken: #1D1712;
+  --color-surface-container-high: #29221A;
+  --color-hairline: #362E24;
+  --color-ink: #F4EFE6;
+  --color-body: #C9C0B2;
+  --color-mute: #8B8376;
+  --color-inverse-surface: #F4EFE6;
+  --color-inverse-on-surface: #221C16;
+  --color-accent: #F3812A;
+  --color-accent-pressed: #FF9A4D;
+  --color-accent-tint: #402A15;
+  --color-on-accent: #1D1208;
+  --color-critical: #E2685A;
+  --color-critical-tint: #3D211D;
+  --color-success: #4FAE84;
+  --color-success-tint: #17332A;
+  --color-focus-ring: #6C97F5;
+  --color-stage-nuevo: #8FA3B4;
+  --color-stage-nuevo-tint: #26333D;
+  --color-stage-contactado: #7FB0CE;
+  --color-stage-contactado-tint: #1E2E38;
+  --color-stage-cotizacion: #D3A968;
+  --color-stage-cotizacion-tint: #3A2E1B;
+  --color-stage-negociacion: #B79AE0;
+  --color-stage-negociacion-tint: #2E2440;
+  --color-stage-ganado: #4FAE84;
+  --color-stage-ganado-tint: #17332A;
+  --color-stage-perdido: #A39C8E;
+  --color-stage-perdido-tint: #2C2820;
+  --color-priority-alta: #E2685A;
+  --color-priority-media: #D9AE5C;
+  --color-priority-baja: #8B8376;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --color-canvas: #FBF7F1;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #F3EEE6;
+  --color-surface-container-high: #EDE6D9;
+  --color-hairline: #E7E0D3;
+  --color-ink: #221C16;
+  --color-body: #5C564C;
+  --color-mute: #948C7E;
+  --color-inverse-surface: #362E24;
+  --color-inverse-on-surface: #FBF3E7;
+  --color-accent: #E2680C;
+  --color-accent-pressed: #C2560A;
+  --color-accent-tint: #FBE4CE;
+  --color-on-accent: #FFFFFF;
+  --color-critical: #B23A2E;
+  --color-critical-tint: #F7DCD6;
+  --color-success: #2F7D5C;
+  --color-success-tint: #DCEFE4;
+  --color-focus-ring: #2F6FE0;
+  --color-stage-nuevo: #5B6B7A;
+  --color-stage-nuevo-tint: #E4E9EC;
+  --color-stage-contactado: #3E6E8E;
+  --color-stage-contactado-tint: #DCE8EE;
+  --color-stage-cotizacion: #8A6D3B;
+  --color-stage-cotizacion-tint: #F1E7D3;
+  --color-stage-negociacion: #6D4C9C;
+  --color-stage-negociacion-tint: #EAE1F5;
+  --color-stage-ganado: #2F7D5C;
+  --color-stage-ganado-tint: #DCEFE4;
+  --color-stage-perdido: #8A8377;
+  --color-stage-perdido-tint: #EDEAE2;
+  --color-priority-alta: #B23A2E;
+  --color-priority-media: #C79A3B;
+  --color-priority-baja: #948C7E;
+  color-scheme: light;
+}
+
+/**
+ * Typography — Mi Negocio CRM
+ * Una sola familia UI (Inter). Este CRM utilitario no necesita una segunda
+ * voz de "marketing" como Degular Display (Zapier) o Pin Sans (Pinterest) —
+ * el único registro que "grita" es --type-kpi-display, para los números
+ * del dashboard de Marta. Ver ../design.md para el razonamiento completo.
+ */
+
+:root {
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Números KPI del dashboard — único lugar con peso 800 + tracking negativo */
+  --type-kpi-display-size: 28px;
+  --type-kpi-display-weight: 800;
+  --type-kpi-display-line: 32px;
+  --type-kpi-display-tracking: -0.02em;
+
+  /* Título de pantalla ("Hola, Carlos" / "Hola, Marta") */
+  --type-headline-screen-size: 21px;
+  --type-headline-screen-weight: 700;
+  --type-headline-screen-line: 26px;
+  --type-headline-screen-tracking: -0.01em;
+
+  /* Título de sección / nombre de prospecto en tarjeta */
+  --type-headline-section-size: 16px;
+  --type-headline-section-weight: 700;
+  --type-headline-section-line: 22px;
+
+  /* Cuerpo destacado (nombre de negocio, texto de fila) */
+  --type-body-lg-size: 15px;
+  --type-body-lg-weight: 500;
+  --type-body-lg-line: 22px;
+
+  /* Cuerpo por defecto */
+  --type-body-md-size: 13.5px;
+  --type-body-md-weight: 400;
+  --type-body-md-line: 20px;
+
+  /* Metadata (días sin contacto, fecha de seguimiento) */
+  --type-label-meta-size: 12px;
+  --type-label-meta-weight: 600;
+  --type-label-meta-line: 16px;
+
+  /* Badges / etiquetas uppercase (etapa, prioridad) */
+  --type-label-caps-size: 11px;
+  --type-label-caps-weight: 700;
+  --type-label-caps-line: 14px;
+  --type-label-caps-tracking: 0.05em;
+}
+
+.type-kpi-display {
+  font-family: var(--font-ui);
+  font-size: var(--type-kpi-display-size);
+  font-weight: var(--type-kpi-display-weight);
+  line-height: var(--type-kpi-display-line);
+  letter-spacing: var(--type-kpi-display-tracking);
+  font-variant-numeric: tabular-nums;
+}
+.type-headline-screen {
+  font-family: var(--font-ui);
+  font-size: var(--type-headline-screen-size);
+  font-weight: var(--type-headline-screen-weight);
+  line-height: var(--type-headline-screen-line);
+  letter-spacing: var(--type-headline-screen-tracking);
+}
+.type-headline-section {
+  font-family: var(--font-ui);
+  font-size: var(--type-headline-section-size);
+  font-weight: var(--type-headline-section-weight);
+  line-height: var(--type-headline-section-line);
+}
+.type-body-lg {
+  font-family: var(--font-ui);
+  font-size: var(--type-body-lg-size);
+  font-weight: var(--type-body-lg-weight);
+  line-height: var(--type-body-lg-line);
+}
+.type-body-md {
+  font-family: var(--font-ui);
+  font-size: var(--type-body-md-size);
+  font-weight: var(--type-body-md-weight);
+  line-height: var(--type-body-md-line);
+}
+.type-label-meta {
+  font-family: var(--font-ui);
+  font-size: var(--type-label-meta-size);
+  font-weight: var(--type-label-meta-weight);
+  line-height: var(--type-label-meta-line);
+}
+.type-label-caps {
+  font-family: var(--font-ui);
+  font-size: var(--type-label-caps-size);
+  font-weight: var(--type-label-caps-weight);
+  line-height: var(--type-label-caps-line);
+  letter-spacing: var(--type-label-caps-tracking);
+  text-transform: uppercase;
+}
+
+/**
+ * Spacing — Mi Negocio CRM
+ * Grid de 8px con ajuste fino de 4px. Sin cambios frente a la versión
+ * anterior del sistema: las tres referencias (Zapier, Nintendo, Pinterest)
+ * coinciden en base 8px, así que no había conflicto que resolver aquí.
+ * Se descarta explícitamente el ritmo de 48-64px de secciones de marketing
+ * de Zapier/Pinterest — este es un dashboard denso, no una landing page.
+ */
+
+:root {
+  --space-fine: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 20px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* Alias semánticos usados en componentes */
+  --space-stack-sm: var(--space-xs);   /* 8px entre filas de lista */
+  --space-stack-md: var(--space-sm);   /* 12px entre bloques KPI */
+  --space-section-gap: var(--space-lg); /* 20px entre secciones de pantalla */
+  --space-margin-mobile: var(--space-md);  /* 16px márgenes de pantalla en mobile */
+  --space-margin-desktop: var(--space-xl); /* 24px márgenes de pantalla en desktop */
+}
+
+/**
+ * Radius & Elevation — Mi Negocio CRM
+ *
+ * Radio: exactamente 3 valores (disciplina de Pinterest: "el sistema nunca
+ * introduce un tercer valor entre md y lg" — aquí no hay valor entre sm y
+ * md, y no hay nada más grande que md salvo el pill). Reemplaza el sistema
+ * de 5 valores (sm/md/lg/xl/pill) de la versión anterior.
+ *
+ * Elevación: plana por default — el contraste de superficie (canvas crema vs.
+ * surface blanco) ES la elevación, no la sombra (regla explícita de
+ * Pinterest). Sombra real solo en 2 lugares: el FAB y las hojas/modales.
+ * Se descarta por completo el lenguaje de bisel/cromo de Nintendo.
+ */
+
+:root {
+  --radius-sm: 8px;   /* chips, inputs, PriorityFlag */
+  --radius-md: 16px;  /* botones, tarjetas, KpiTile, modales */
+  --radius-pill: 9999px; /* acciones de contacto, badges de etapa, búsqueda, avatar */
+
+  --shadow-none: none;
+  --shadow-fab: 0 10px 24px rgba(34, 28, 22, 0.20);
+  --shadow-sheet: 0 -8px 30px rgba(34, 28, 22, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shadow-fab: 0 10px 24px rgba(0, 0, 0, 0.5);
+    --shadow-sheet: 0 -8px 30px rgba(0, 0, 0, 0.45);
+  }
+}
+:root[data-theme="dark"] {
+  --shadow-fab: 0 10px 24px rgba(0, 0, 0, 0.5);
+  --shadow-sheet: 0 -8px 30px rgba(0, 0, 0, 0.45);
+}
+:root[data-theme="light"] {
+  --shadow-fab: 0 10px 24px rgba(34, 28, 22, 0.20);
+  --shadow-sheet: 0 -8px 30px rgba(34, 28, 22, 0.18);
+}
+
+/**
+ * Base reset — Mi Negocio CRM
+ * Reset mínimo. El canvas de la app es --color-canvas (crema), nunca blanco
+ * puro ni gris — es la señal de temperatura de marca (Zapier).
+ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: var(--type-body-md-size);
+  line-height: var(--type-body-md-line);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/**
+ * Component styles — Mi Negocio CRM
+ * Consumido por todos los .jsx en components/core/. Depende de los tokens
+ * en ../../tokens/ (import ../../styles.css antes que este archivo).
+ */
+
+/* ---------- Icon ---------- */
+.mn-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  color: currentColor;
+  flex: none;
+}
+.mn-icon svg { width: 100%; height: 100%; stroke: currentColor; stroke-width: 1.75; }
+
+/* ---------- Button ---------- */
+.mn-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-fine);
+  height: 44px;
+  padding: 0 var(--space-md);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: var(--type-body-lg-size);
+  font-weight: 600;
+  transition: background-color 100ms ease, transform 80ms ease;
+}
+.mn-button:active { transform: scale(0.98); }
+.mn-button--primary { background: var(--color-accent); color: var(--color-on-accent); }
+.mn-button--primary:hover { background: var(--color-accent-pressed); }
+.mn-button--secondary { background: var(--color-surface-sunken); color: var(--color-ink); }
+.mn-button--secondary:hover { background: var(--color-surface-container-high); }
+.mn-button--ghost { background: transparent; color: var(--color-ink); }
+.mn-button--ghost:hover { background: var(--color-surface-sunken); }
+.mn-button--danger { background: var(--color-critical); color: #fff; }
+.mn-button--danger:hover { filter: brightness(0.92); }
+.mn-button--full { width: 100%; }
+.mn-button--pill { border-radius: var(--radius-pill); }
+
+/* ---------- IconButton ---------- */
+.mn-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+  transition: background-color 100ms ease, transform 80ms ease;
+}
+.mn-icon-button:hover { background: var(--color-surface-container-high); }
+.mn-icon-button:active { transform: scale(0.98); }
+.mn-icon-button--outline { background: transparent; border-color: var(--color-hairline); }
+
+/* ---------- Badge (etapa de pipeline) ---------- */
+.mn-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.mn-badge--nuevo        { background: var(--color-stage-nuevo-tint);        color: var(--color-stage-nuevo); }
+.mn-badge--contactado   { background: var(--color-stage-contactado-tint);   color: var(--color-stage-contactado); }
+.mn-badge--cotizacion   { background: var(--color-stage-cotizacion-tint);   color: var(--color-stage-cotizacion); }
+.mn-badge--negociacion  { background: var(--color-stage-negociacion-tint);  color: var(--color-stage-negociacion); }
+.mn-badge--ganado       { background: var(--color-stage-ganado-tint);       color: var(--color-stage-ganado); }
+.mn-badge--perdido      { background: var(--color-stage-perdido-tint);      color: var(--color-stage-perdido); }
+
+/* ---------- Tag (metadata inline) ---------- */
+.mn-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+}
+.mn-tag .mn-icon { width: 13px; height: 13px; }
+.mn-tag--risk    { background: var(--color-critical-tint); color: var(--color-critical); }
+.mn-tag--success { background: var(--color-success-tint);  color: var(--color-success); }
+.mn-tag--neutral { background: var(--color-surface-sunken); color: var(--color-mute); }
+.mn-tag--risk::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--color-critical);
+}
+
+/* ---------- PriorityFlag (nuevo) ----------
+ * Forma deliberadamente distinta a Badge: radius-sm (no pill), fondo
+ * surface con borde hairline, punto de color en vez de texto-a-color-sobre-tint.
+ * No debe confundirse visualmente con un Badge de etapa. */
+.mn-priority-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.mn-priority-flag__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.mn-priority-flag--alta  .mn-priority-flag__dot { background: var(--color-priority-alta); }
+.mn-priority-flag--media .mn-priority-flag__dot { background: var(--color-priority-media); }
+.mn-priority-flag--baja  .mn-priority-flag__dot { background: var(--color-priority-baja); }
+/* Variante compacta: sin fondo/borde, para usarla dentro de ProspectCard junto al risk tag */
+.mn-priority-flag--inline { background: transparent; border-color: transparent; padding: 3px 8px 3px 6px; }
+
+/* ---------- Input ---------- */
+.mn-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-fine);
+  height: 44px;
+  padding: 0 var(--space-sm);
+  background: var(--color-surface-sunken);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--type-body-md-size);
+  color: var(--color-ink);
+  width: 100%;
+}
+.mn-input::placeholder { color: var(--color-mute); }
+.mn-input:focus-within { border-color: var(--color-focus-ring); }
+.mn-input--field { border-radius: var(--radius-sm); background: var(--color-surface); border-color: var(--color-hairline); }
+
+/* ---------- ProspectCard ---------- */
+.mn-prospect-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-sm) var(--space-xs);
+}
+.mn-prospect-card__top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-xs); }
+.mn-prospect-card__name { margin: 0; font-family: var(--font-ui); font-size: var(--type-headline-section-size); font-weight: var(--type-headline-section-weight); color: var(--color-ink); }
+.mn-prospect-card__biz { margin: 1px 0 0; font-family: var(--font-ui); font-size: 12.5px; color: var(--color-mute); }
+.mn-prospect-card__meta { display: flex; align-items: center; gap: var(--space-fine); flex-wrap: wrap; }
+.mn-prospect-card__meta-text { font-size: 11.5px; color: var(--color-mute); font-weight: 600; }
+.mn-prospect-card__actions { display: flex; gap: var(--space-fine); margin-top: 2px; }
+.mn-prospect-card__actions .mn-button { flex: 1; border-radius: var(--radius-pill); height: 38px; font-size: 12.5px; }
+
+/* ---------- KpiTile (nuevo) ---------- */
+.mn-kpi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+}
+.mn-kpi-tile--warn { background: var(--color-critical-tint); }
+.mn-kpi-tile__num { font-family: var(--font-ui); font-size: var(--type-kpi-display-size); font-weight: var(--type-kpi-display-weight); letter-spacing: var(--type-kpi-display-tracking); line-height: var(--type-kpi-display-line); font-variant-numeric: tabular-nums; color: var(--color-ink); }
+.mn-kpi-tile--warn .mn-kpi-tile__num { color: var(--color-critical); }
+.mn-kpi-tile__label { font-family: var(--font-ui); font-size: 11.5px; font-weight: 600; color: var(--color-mute); }
+.mn-kpi-tile--warn .mn-kpi-tile__label { color: var(--color-critical); opacity: 0.85; }
+
+/* ---------- PeriodToggle (nuevo, Milestone 5) — Mi desempeño/Dashboard/Reportes ---------- */
+.mn-period-toggle { display: flex; background: var(--color-surface-sunken); border-radius: var(--radius-pill); padding: 3px; }
+.mn-period-toggle button { flex: 1; border: none; background: transparent; padding: 8px; border-radius: var(--radius-pill); font-family: var(--font-ui); font-size: 12.5px; font-weight: 700; color: var(--color-mute); cursor: pointer; }
+.mn-period-toggle button.active { background: var(--color-surface); color: var(--color-ink); box-shadow: 0 1px 3px rgba(34,28,22,0.12); }
+
+/* ---------- PerfTile (nuevo, Milestone 5) — Mi desempeño ---------- */
+.mn-perf-tile { background: var(--color-surface); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.mn-perf-tile__num { font-family: var(--font-ui); font-size: 30px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--color-ink); }
+.mn-perf-tile__label { font-family: var(--font-ui); font-size: 12.5px; font-weight: 600; color: var(--color-mute); }
+.mn-perf-tile__delta { font-family: var(--font-ui); font-size: 11.5px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+.mn-perf-tile__delta--up { color: var(--color-success); }
+.mn-perf-tile__delta--down { color: var(--color-critical); }
+.mn-perf-tile__delta--flat { color: var(--color-mute); }
+
+/* ---------- AlertBanner (nuevo, Milestone 5) — Dashboard de Marta ---------- */
+.mn-alert-banner { background: var(--color-critical-tint); border-radius: var(--radius-md); padding: 12px 14px; display: flex; align-items: center; gap: 10px; border: none; width: 100%; cursor: pointer; text-align: left; }
+.mn-alert-banner__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-critical); flex: none; }
+.mn-alert-banner__txt { font-family: var(--font-ui); font-size: 12.5px; font-weight: 600; color: var(--color-ink); flex: 1; }
+.mn-alert-banner__go { font-family: var(--font-ui); font-size: 11.5px; font-weight: 700; color: var(--color-critical); flex: none; }
+
+/* Compartido entre Login, Nuevo prospecto y edición de Ficha */
+.field-group { display: flex; flex-direction: column; gap: 6px; }
+.field-label { font-family: var(--font-ui); font-size: 12px; font-weight: 600; color: var(--color-ink); }
+
+textarea.mn-field-text {
+  background: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  color: var(--color-ink);
+  resize: none;
+  min-height: 72px;
+}
+
+.chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink);
+  border: 1px solid transparent;
+}
+.chip.selected { background: var(--color-accent-tint); color: var(--color-accent-pressed); border-color: var(--color-accent); }
+
+.chip-row--scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+.chip--filter { background: var(--color-surface-sunken); }
+.chip--filter.selected { background: var(--color-ink); color: var(--color-canvas); border-color: transparent; }
+
+.search-row { display: flex; gap: 8px; align-items: center; }
+.search-row .mn-input { flex: 1; }
+
+/* Movido desde interaccion.css (ICS-92) — ahora también lo usa /tareas/nueva. */
+.contact-type-row { display: flex; gap: 8px; }
+.contact-type-chip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  border: 1px solid transparent;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.contact-type-chip.selected { background: var(--color-accent-tint); color: var(--color-accent-pressed); border-color: var(--color-accent); }
+
+.next-follow-card { background: var(--color-surface); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.next-follow-card__title { font-family: var(--font-ui); font-size: 12.5px; font-weight: 700; color: var(--color-ink); margin: 0; }

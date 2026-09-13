@@ -1,0 +1,11 @@
+{
+  "projectId": "944dc20a-0d56-4b24-8500-64ae47354bff",
+  "shape": "package",
+  "pkg": "mi-crm-next",
+  "globalName": "MiNegocioCRM",
+  "entry": "src/design/dist/index.js",
+  "srcDir": "src/design/components/core",
+  "cssEntry": "src/design/_ds_bundle_entry.css",
+  "tokensGlob": "src/design/tokens/*.css",
+  "readmeHeader": ".design-sync/conventions.md"
+}
