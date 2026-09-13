@@ -137,47 +137,34 @@ export const update = mutation({
 });
 
 /**
- * ICS-14/17/21: cambio de etapa. "perdido" exige lossReason; salir de
- * "perdido" lo limpia. "ganado" exige amount+product.
+ * ICS-14/17: cambio de etapa. "perdido" exige lossReason; salir de "perdido"
+ * lo limpia.
  *
- * Invariante de venta: a lo más una fila de `sales` por prospecto, y existe
- * si y solo si el prospecto está actualmente en "ganado". Entrar a "ganado"
- * hace upsert (si ya había una venta previa para este prospecto — porque se
- * salió y volvió a entrar — se actualiza en vez de duplicarla); salir de
- * "ganado" hacia cualquier otra etapa borra la venta, porque deja de ser
- * cierto que el prospecto está vendido. Sin esto, un ciclo
- * ganado → otra etapa → ganado generaba una fila de `sales` por cada vuelta,
- * inflando conteos en Ficha/Mi desempeño.
+ * ICS-99: `changeStage` queda como movimiento de etapa PURO — ya no acepta
+ * `amount`/`product` ni toca `sales`. `prospects.stage` es el ciclo de la
+ * relación, no una negociación individual (ICS-98 B2); "ganado" se mueve
+ * igual que cualquier otra etapa. Registrar una venta es una acción explícita
+ * aparte (`sales.createDirect` / `opportunities.win`, ICS-100/101) — ya no un
+ * efecto secundario de este mutation. `sales` es histórico e inmutable: nunca
+ * se crea ni se borra desde aquí.
  *
- * ICS-80:
- *  - la línea de tiempo (append-only) recibe SIEMPRE un evento `cambio-etapa`
- *    con `fromStage`/`toStage`; al entrar a "ganado", además un evento `venta`.
- *    Salir de "ganado" borra la fila `sales` como antes, pero el evento `venta`
- *    histórico NO se borra — la hidratación de ICS-85 lo muestra como
- *    "venta registrada" aunque después se revirtiera.
- *  - al pasar a "ganado"/"perdido" se cancela el seguimiento pendiente
- *    (`resolution: "cancelado"`, `closureReason`), nunca "hecho".
- *
- * NOTA (ICS-80): la creación de la venta seguirá viviendo aquí hasta que el
- * milestone 7 (ICS-99) desacople `sales` de `changeStage`.
+ * ICS-80 (vigente): la línea de tiempo (append-only) recibe SIEMPRE un evento
+ * `cambio-etapa` con `fromStage`/`toStage`; al pasar a "ganado"/"perdido" se
+ * cancela el seguimiento pendiente (`resolution: "cancelado"`, `closureReason`),
+ * nunca "hecho".
  */
 export const changeStage = mutation({
   args: {
     id: v.id("prospects"),
     stage,
     lossReason: v.optional(lossReason),
-    amount: v.optional(v.number()),
-    product: v.optional(v.string()),
   },
-  handler: async (ctx, { id, stage: newStage, lossReason: reason, amount, product }) => {
+  handler: async (ctx, { id, stage: newStage, lossReason: reason }) => {
     const user = await requireVendedor(ctx);
     const prospect = await requireProspect(ctx, id);
     const fromStage = prospect.stage;
     if (newStage === "perdido" && !reason) {
       throw new Error("Selecciona un motivo antes de marcar como perdido (ICS-17).");
-    }
-    if (newStage === "ganado" && (!amount || amount <= 0 || !product?.trim())) {
-      throw new Error("Registra el monto y el producto/servicio vendido antes de marcar como ganado (ICS-21).");
     }
     const now = Date.now();
     await ctx.db.patch(id, {
@@ -209,20 +196,6 @@ export const changeStage = mutation({
       toStage: newStage,
     });
 
-    const existingSale = await ctx.db.query("sales").withIndex("by_prospect", (q) => q.eq("prospectId", id)).first();
-    if (newStage === "ganado") {
-      const saleFields = { prospectId: id, amount, product: product.trim(), closedAt: now, closedBy: user._id };
-      let saleId;
-      if (existingSale) {
-        await ctx.db.patch(existingSale._id, saleFields);
-        saleId = existingSale._id;
-      } else {
-        saleId = await ctx.db.insert("sales", saleFields);
-      }
-      await recordTimelineEvent(ctx, { prospectId: id, at: now, type: "venta", actorId: user._id, saleId });
-    } else if (existingSale) {
-      await ctx.db.delete(existingSale._id);
-    }
     return ctx.db.get(id);
   },
 });

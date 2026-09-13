@@ -12,6 +12,7 @@ import {
   resolution,
   interactionSource,
   timelineEventType,
+  opportunityStage,
 } from "./validators.js";
 
 /**
@@ -96,15 +97,60 @@ export default defineSchema({
     .index("by_status_and_date", ["status", "at"])
     .index("by_owner_status_and_date", ["ownerId", "status", "at"]),
 
+  // ICS-99 — oportunidad de venta: pipeline comercial real, independiente de
+  // `prospects.stage` (ciclo de la relación, ICS-98 B2). Un prospecto puede
+  // tener 0..N oportunidades, incluso simultáneas.
+  opportunities: defineTable({
+    prospectId: v.id("prospects"),
+    // Dueño comercial. Mientras la oportunidad está abierta, sigue al dueño
+    // del prospecto (syncOpenOpportunitiesOwner); al cerrarse queda congelado.
+    ownerId: v.id("users"),
+    name: v.string(),
+    product: v.string(),
+    // Ausente (no 0) = "monto pendiente" — excluida de pipeline/forecast hasta
+    // completarse. `create`/`update` sí exigen > 0 (ICS-98 B1).
+    estimatedAmount: v.optional(v.number()),
+    stage: opportunityStage,
+    expectedCloseDate: v.optional(v.string()), // "YYYY-MM-DD", puede ser futura
+    lossReason: v.optional(lossReason),
+    closedAt: v.optional(v.number()),
+    closedBy: v.optional(v.id("users")),
+    saleId: v.optional(v.id("sales")),
+    editedAt: v.optional(v.number()),
+    editedBy: v.optional(v.id("users")),
+    // "manual" (creada por un vendedor) | "migration" (backfill de datos
+    // legacy). `migrationKey` hace la migración idempotente (ICS-98 B9).
+    source: v.optional(v.union(v.literal("manual"), v.literal("migration"))),
+    migrationKey: v.optional(v.string()),
+  })
+    .index("by_prospect", ["prospectId"])
+    .index("by_prospect_and_stage", ["prospectId", "stage"])
+    .index("by_owner_and_stage", ["ownerId", "stage"])
+    .index("by_owner_and_expected", ["ownerId", "expectedCloseDate"])
+    .index("by_stage_and_expected", ["stage", "expectedCloseDate"])
+    .index("by_migration_key", ["migrationKey"]),
+
   sales: defineTable({
     prospectId: v.id("prospects"),
     amount: v.number(),
     product: v.string(),
     closedAt: v.number(),
     closedBy: v.id("users"),
+    // ICS-99 — histórico e inmutable: ya no depende de `stage === "ganado"`.
+    opportunityId: v.optional(v.id("opportunities")), // ausente = venta directa
+    voidedAt: v.optional(v.number()),
+    voidedBy: v.optional(v.id("users")),
+    voidReason: v.optional(v.string()),
+    // Vendedor acreditado al cierre — nunca cambia por reasignaciones
+    // posteriores del prospecto (a diferencia de `opportunities.ownerId`).
+    ownerId: v.optional(v.id("users")),
   })
     .index("by_prospect", ["prospectId"])
-    .index("by_closedBy", ["closedBy", "closedAt"]),
+    .index("by_closedBy", ["closedBy", "closedAt"])
+    .index("by_owner_and_closedAt", ["ownerId", "closedAt"])
+    .index("by_closedAt", ["closedAt"])
+    .index("by_prospect_and_closedAt", ["prospectId", "closedAt"])
+    .index("by_opportunity", ["opportunityId"]),
 
   // ICS-78 — línea de tiempo de la relación (ficha). Append-only: la escritura
   // desde las mutations y la query `timeline.listByProspect` viven en ICS-85.
@@ -118,5 +164,7 @@ export default defineSchema({
     saleId: v.optional(v.id("sales")),
     fromStage: v.optional(stage),
     toStage: v.optional(stage),
+    // ICS-99 — requerido por "oportunidad-ganada"/"oportunidad-perdida".
+    opportunityId: v.optional(v.id("opportunities")),
   }).index("by_prospect_and_at", ["prospectId", "at"]),
 });

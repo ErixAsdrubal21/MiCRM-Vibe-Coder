@@ -56,7 +56,9 @@ export const CHANNEL_LABELS = {
   otro: "Otro",
 };
 
-// — Motivo de pérdida —
+// — Motivo de pérdida — compartido por `prospects.lossReason` y
+// `opportunities.lossReason` (ICS-99: confirmado que aplica igual a una
+// oportunidad perdida; no hizo falta ampliarlo).
 export const LOSS_REASON_VALUES = ["precio", "competencia", "sin-respuesta", "tiempo", "otro"];
 export const LOSS_REASON_LABELS = {
   precio: "Precio",
@@ -87,8 +89,33 @@ export const RESOLUTION_LABELS = {
 // — Origen de una interacción (ICS-78) — `manual` ausente se trata como `manual`.
 export const INTERACTION_SOURCE_VALUES = ["manual", "follow-up", "sistema"];
 
-// — Tipo de evento en la línea de tiempo de la ficha (ICS-78) —
-export const TIMELINE_EVENT_TYPE_VALUES = ["interaccion", "cambio-etapa", "cierre-seguimiento", "venta"];
+// — Tipo de evento en la línea de tiempo de la ficha (ICS-78, +ICS-99) —
+export const TIMELINE_EVENT_TYPE_VALUES = [
+  "interaccion",
+  "cambio-etapa",
+  "cierre-seguimiento",
+  "venta",
+  "oportunidad-ganada",
+  "oportunidad-perdida",
+  "venta-anulada",
+];
+
+// — Etapa de una oportunidad de venta (ICS-99) — pipeline comercial real;
+// distinto de `prospects.stage` (ciclo de la relación, sin sincronización
+// automática — ICS-98 B2). `ganada`/`perdida` son las únicas cerradas.
+export const OPPORTUNITY_STAGE_VALUES = ["calificacion", "cotizacion", "negociacion", "ganada", "perdida"];
+export const OPPORTUNITY_STAGE_LABELS = {
+  calificacion: "Calificación",
+  cotizacion: "Cotización",
+  negociacion: "Negociación",
+  ganada: "Ganada",
+  perdida: "Perdida",
+};
+export const OPPORTUNITY_OPEN_STAGES = ["calificacion", "cotizacion", "negociacion"];
+
+// — Probabilidad de cierre por etapa (%), solo para forecast ponderado —
+// derivada de la etapa, no es un campo editable (ICS-98 "Probabilidad").
+export const STAGE_PROBABILITY = { calificacion: 10, cotizacion: 30, negociacion: 60 };
 
 // — Roles —
 export const ROLE_VALUES = ["administrador", "vendedor"];
