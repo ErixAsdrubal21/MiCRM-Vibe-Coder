@@ -77,6 +77,12 @@
 .mn-badge--ganado       { background: var(--color-stage-ganado-tint);       color: var(--color-stage-ganado); }
 .mn-badge--perdido      { background: var(--color-stage-perdido-tint);      color: var(--color-stage-perdido); }
 
+/* ICS-102 — etapas de oportunidad que no tienen equivalente 1:1 arriba.
+   "cotizacion"/"negociacion" ya están cubiertas (mismas claves). */
+.mn-badge--calificacion { background: var(--color-stage-nuevo-tint);        color: var(--color-stage-nuevo); }
+.mn-badge--ganada       { background: var(--color-stage-ganado-tint);       color: var(--color-stage-ganado); }
+.mn-badge--perdida      { background: var(--color-stage-perdido-tint);      color: var(--color-stage-perdido); }
+
 /* ---------- Tag (metadata inline) ---------- */
 .mn-tag {
   display: inline-flex;
