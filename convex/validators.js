@@ -15,6 +15,7 @@ import {
   RESOLUTION_VALUES,
   INTERACTION_SOURCE_VALUES,
   TIMELINE_EVENT_TYPE_VALUES,
+  OPPORTUNITY_STAGE_VALUES,
 } from "../shared/crmEnums.js";
 
 const literals = (values) => v.union(...values.map((value) => v.literal(value)));
@@ -29,3 +30,4 @@ export const outcome = literals(OUTCOME_VALUES);
 export const resolution = literals(RESOLUTION_VALUES);
 export const interactionSource = literals(INTERACTION_SOURCE_VALUES);
 export const timelineEventType = literals(TIMELINE_EVENT_TYPE_VALUES);
+export const opportunityStage = literals(OPPORTUNITY_STAGE_VALUES);

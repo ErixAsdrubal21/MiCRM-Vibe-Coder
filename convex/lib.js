@@ -1,6 +1,6 @@
 /** Helpers compartidos entre prospects.js / interactions.js / followUps.js. */
 
-import { ACTIVE_STAGE_VALUES, TIMELINE_EVENT_TYPE_VALUES } from "../shared/crmEnums.js";
+import { ACTIVE_STAGE_VALUES, TIMELINE_EVENT_TYPE_VALUES, OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
 
 export const ACTIVE_STAGES = ACTIVE_STAGE_VALUES;
 
@@ -62,14 +62,18 @@ export async function syncPendingFollowUpOwner(ctx, prospectId, ownerId) {
  * ICS-85 — `timelineEvents` es la ÚNICA fuente cronológica de la ficha
  * (ICS-86), append-only. Este helper es el único punto de escritura: siempre
  * `insert`, nunca `patch` ni `delete` de un evento. Su firma es estable para
- * que las mutations de ICS-79 (interacciones) e ICS-80 (seguimientos / cambio
- * de etapa) lo llamen sin acoplarse a la forma de la tabla.
+ * que las mutations de ICS-79 (interacciones), ICS-80 (seguimientos / cambio
+ * de etapa) e ICS-99..101 (oportunidades / ventas) lo llamen sin acoplarse a
+ * la forma de la tabla.
  *
  * Campo obligatorio por `type` (además de `prospectId`, `at`, `type`):
- *   - `interaccion`         → `interactionId`  (+ `actorId` = quien la registró)
- *   - `cambio-etapa`        → `toStage`        (`fromStage` ausente = primer evento)
- *   - `cierre-seguimiento`  → `followUpId`     (+ `interactionId` de la nota de cierre)
- *   - `venta`               → `saleId`
+ *   - `interaccion`          → `interactionId`  (+ `actorId` = quien la registró)
+ *   - `cambio-etapa`         → `toStage`        (`fromStage` ausente = primer evento)
+ *   - `cierre-seguimiento`   → `followUpId`     (+ `interactionId` de la nota de cierre)
+ *   - `venta`                → `saleId`
+ *   - `oportunidad-ganada`   → `opportunityId`  (ICS-99)
+ *   - `oportunidad-perdida`  → `opportunityId`  (ICS-99)
+ *   - `venta-anulada`        → `saleId`         (ICS-99)
  * `actorId` es recomendable siempre salvo en eventos sintéticos del backfill.
  */
 const TIMELINE_REQUIRED_FIELD = {
@@ -77,17 +81,20 @@ const TIMELINE_REQUIRED_FIELD = {
   "cambio-etapa": "toStage",
   "cierre-seguimiento": "followUpId",
   venta: "saleId",
+  "oportunidad-ganada": "opportunityId",
+  "oportunidad-perdida": "opportunityId",
+  "venta-anulada": "saleId",
 };
 
 export async function recordTimelineEvent(
   ctx,
-  { prospectId, at, type, actorId, interactionId, followUpId, saleId, fromStage, toStage },
+  { prospectId, at, type, actorId, interactionId, followUpId, saleId, fromStage, toStage, opportunityId },
 ) {
   if (!TIMELINE_EVENT_TYPE_VALUES.includes(type)) {
     throw new Error(`Tipo de evento de línea de tiempo desconocido: ${type}`);
   }
   const required = TIMELINE_REQUIRED_FIELD[type];
-  const fields = { prospectId, at, type, actorId, interactionId, followUpId, saleId, fromStage, toStage };
+  const fields = { prospectId, at, type, actorId, interactionId, followUpId, saleId, fromStage, toStage, opportunityId };
   if (fields[required] === undefined || fields[required] === null) {
     throw new Error(`Un evento "${type}" requiere ${required}.`);
   }
@@ -97,6 +104,25 @@ export async function recordTimelineEvent(
     if (value !== undefined) doc[key] = value;
   }
   return ctx.db.insert("timelineEvents", doc);
+}
+
+/**
+ * ICS-99 — semántica de `ownerId` adoptada: una oportunidad ABIERTA sigue al
+ * dueño actual del prospecto; una CERRADA (ganada/perdida) queda congelada.
+ * Llamar desde cualquier mutation que reasigne `prospects.ownerId` (hoy no
+ * existe esa mutation — MVP monovendedor; patrón idéntico a
+ * `syncPendingFollowUpOwner`, queda listo para cuando exista).
+ */
+export async function syncOpenOpportunitiesOwner(ctx, prospectId, ownerId) {
+  const open = await ctx.db
+    .query("opportunities")
+    .withIndex("by_prospect_and_stage", (q) => q.eq("prospectId", prospectId))
+    .collect();
+  for (const opportunity of open) {
+    if (OPPORTUNITY_OPEN_STAGES.includes(opportunity.stage) && opportunity.ownerId !== ownerId) {
+      await ctx.db.patch(opportunity._id, { ownerId });
+    }
+  }
 }
 
 /**
