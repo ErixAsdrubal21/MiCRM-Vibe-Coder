@@ -25,11 +25,17 @@ No Playwright/Chromium in this environment (macOS 12 Monterey — a prior attemp
 
 **Action for the user**: open the project at `https://claude.ai/design/p/944dc20a-0d56-4b24-8500-64ae47354bff` and eyeball each of the 11 cards (or serve `./ds-bundle` locally with `node .ds-sync/storybook/http-serve.mjs ./ds-bundle` and open `.review.html`). Report anything that looks wrong (unstyled, wrong color, broken layout) and it gets fixed component-by-component.
 
-## What this run did NOT touch — deliberate scope cut, not an oversight
+## Screens — `ui_kits/crm/` (hand-authored, NOT `/design-sync` output)
 
-The project **used to have** 3 hand-authored full-screen mockups (`ui_kits/crm/Dashboard.jsx`, `ProspectosList.jsx`, `ProspectDetail.jsx`, `BottomNav.jsx`, `index.html`) from an earlier session, built against the **old** Poppins/green token set. They were **deleted** in this sync (not regenerated) because they'd otherwise sit inconsistent with the new Inter/marigold tokens and mislead the design agent. `/design-sync`'s converter does not produce this kind of artifact at all (it only emits `components/<group>/<Name>/`) — full-screen mockups are hand-authored React uploaded directly via `DesignSync write_files`, outside this skill.
+The project **used to have** 3 hand-authored full-screen mockups (`ui_kits/crm/Dashboard.jsx`, `ProspectosList.jsx`, `ProspectDetail.jsx`, `BottomNav.jsx`, `index.html`) from an earlier session, built against the **old** Poppins/green token set. They were **deleted** in the components sync above (not regenerated there) because they'd otherwise sit inconsistent with the new Inter/marigold tokens.
 
-**Known follow-up, not started**: 8 of the 11 PRD screens have no mockup in this project at all (Login, Tareas del día, Nuevo prospecto, Registrar interacción, Pipeline, Reportes, Mi desempeño, Configuración) — the other 3 (Dashboard, Lista de prospectos, Ficha) just lost theirs to the deletion above. All 11 need hand-authored screen recreations against the current app (`src/app/(app)/**`) if/when that work happens.
+**Done in a follow-up the same day**: 8 of the 11 PRD screens rebuilt from scratch against the current app (`src/app/(app)/**`, `src/nav/AppLayout.js`, `src/nav/navConfig.js`) — Login, Tareas del día, Nuevo prospecto, Registrar interacción, Pipeline, Reportes, Mi desempeño, Configuración — as ONE click-through kit under `ui_kits/crm/` (source committed at `.design-sync/screens/`, same directory structure, mirrored on upload). Config includes the "restablecer contraseña" per-member action from PR #9 (unmerged at time of writing, but the intended design). Role switch (Carlos/vendedor vs. Marta/administrador) happens at the Login screen; the real bottom-nav + FAB + logout chrome is reproduced in `Shell.jsx` from `src/nav/AppLayout.js` + `navConfig.js` literally.
+
+**Still not done**: the 3 screens that got deleted (Dashboard, Lista de prospectos, Ficha del cliente) — they show as a `Placeholder` card (same pattern as `src/nav/Placeholder.js`) when navigated to in the kit. Rebuilding them is the same recipe as the 8: read the real page source, port structure/copy, style with the already-synced `mn-*` classes + `shell.css` chrome, wire into `index.html`'s `App()` router and `Shell`'s nav.
+
+**`ui_kits/crm/shell.css`** (hand-written, sibling to the `/design-sync`-generated root `styles.css`) carries what the 8 screens need beyond components + tokens: `src/design/app-shell.css` (chrome: top-bar, bottom-nav, fab, list-row, section-label, divider) + `pipeline.css` + `reportes.css` + `configuracion.css` + `login.css`, concatenated in that order. Re-generate the same way as `_ds_bundle_entry.css` (§ above) if those source files change — nothing detects staleness automatically. `ficha.css` is **not** in it yet (Ficha isn't in this kit); add it when Ficha gets rebuilt.
+
+No render check ran on these screens either (same Chromium gap, see above) — never opened in a browser, not even locally.
 
 ## Guidelines cards — deleted, not replaced
 
