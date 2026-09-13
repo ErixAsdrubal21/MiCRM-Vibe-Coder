@@ -9,6 +9,8 @@ const SMOKE_PREFIXES = [
   "[SMOKE ICS-80]",
   "[SMOKE ICS-81]",
   "[SMOKE ICS-100]",
+  "[SMOKE ICS-101]",
+  "[SMOKE VENTAS]",
 ];
 
 /** Rechaza cualquier id cuyo prospecto no sea de prueba (o no exista). */
