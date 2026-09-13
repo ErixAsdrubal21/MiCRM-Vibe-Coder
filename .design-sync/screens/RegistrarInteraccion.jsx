@@ -14,7 +14,6 @@ function RegistrarInteraccion({ prospectId, onClose, onSaved }) {
   const [type, setType] = React.useState('whatsapp');
   const [followUpType, setFollowUpType] = React.useState('whatsapp');
   const followUpRequired = prospect.stage !== 'ganado' && prospect.stage !== 'perdido';
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   return (
     <>
@@ -49,7 +48,7 @@ function RegistrarInteraccion({ prospectId, onClose, onSaved }) {
           <p className="next-follow-card__title">Próximo seguimiento{followUpRequired && ' *'}</p>
           <div className="field-group">
             <label className="mn-input mn-input--field">
-              <input type="date" min={tomorrow} defaultValue={tomorrow}
+              <input type="date"
                 style={{ border: 'none', background: 'transparent', outline: 'none', flex: 1, font: 'inherit', color: 'inherit' }} />
             </label>
           </div>
