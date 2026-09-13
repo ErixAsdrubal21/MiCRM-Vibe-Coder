@@ -10,6 +10,28 @@ window.MOCK_PROSPECTS = [
   { id: 'p6', name: 'Consultorio Dr. Medina', interest: 'Equipo de oficina', phone: '55 6789 0123', channel: 'otro', stage: 'perdido', lossReason: 'precio' },
 ];
 
+window.MOCK_DASHBOARD = {
+  activeCount: 18,
+  salesThisWeek: 3,
+  salesThisMonth: 9,
+  conversionThisMonth: 34,
+  atRiskCount: 2,
+  tasksToday: { completadas: 3, total: 5 },
+  carlos: { name: 'Carlos', conversionThisWeek: 41 },
+};
+
+// Línea de tiempo de la Ficha — solo para 'p1' (Ferretería El Tornillo), los
+// 4 tipos de evento de ICS-85/86 mezclados en un solo hilo cronológico.
+window.MOCK_TIMELINE = {
+  p1: [
+    { id: 't1', type: 'interaccion', at: 'Hoy · 10:20', actorName: 'Carlos', contactType: 'whatsapp', note: 'Le gustó el precio, pidió una semana para decidir.', outcome: 'positivo', mine: true },
+    { id: 't2', type: 'cierre-seguimiento', at: 'Ayer · 09:05', actorName: 'Carlos', resolution: 'reprogramado', note: 'Pidió que le marcara la siguiente semana.' },
+    { id: 't3', type: 'cambio-etapa', at: '3 sept · 16:40', actorName: 'Carlos', fromStage: 'contactado', toStage: 'negociacion' },
+    { id: 't4', type: 'interaccion', at: '3 sept · 16:38', actorName: 'Carlos', contactType: 'llamada', note: 'Primer contacto, muy interesado en tinacos de 1100L para su bodega.', outcome: 'positivo', mine: true },
+    { id: 't5', type: 'venta', at: '18 ago · 12:00', actorName: 'Carlos', amount: 4200, product: 'Tinaco 750L' },
+  ],
+};
+
 window.MOCK_REPORTES = {
   ventas: {
     nuevos: 14,

@@ -1,4 +1,4 @@
-<!-- @dsCard group="CRM App" viewport="390x780" name="App CRM (click-through) — 8 pantallas" subtitle="Login, Tareas, Nuevo prospecto, Registrar interacción, Pipeline, Reportes, Mi desempeño, Configuración" -->
+<!-- @dsCard group="CRM App" viewport="390x780" name="App CRM (click-through) — 11 pantallas" subtitle="Login, Tareas, Dashboard, Prospectos, Ficha, Nuevo prospecto, Registrar interacción, Pipeline, Reportes, Mi desempeño, Configuración" -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -18,8 +18,6 @@
     position: relative;
   }
   #root { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .role-switch { position: absolute; top: -44px; left: 0; right: 0; display: flex; justify-content: center; gap: 8px; font-family: system-ui, sans-serif; font-size: 12px; }
-  .role-switch button { border: none; border-radius: 999px; padding: 6px 12px; background: #fff; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -36,6 +34,9 @@
   <script type="text/babel" src="Placeholder.jsx"></script>
   <script type="text/babel" src="Login.jsx"></script>
   <script type="text/babel" src="Tareas.jsx"></script>
+  <script type="text/babel" src="Dashboard.jsx"></script>
+  <script type="text/babel" src="ProspectosList.jsx"></script>
+  <script type="text/babel" src="Ficha.jsx"></script>
   <script type="text/babel" src="NuevoProspecto.jsx"></script>
   <script type="text/babel" src="RegistrarInteraccion.jsx"></script>
   <script type="text/babel" src="Pipeline.jsx"></script>
@@ -43,21 +44,23 @@
   <script type="text/babel" src="MiDesempeno.jsx"></script>
   <script type="text/babel" src="Configuracion.jsx"></script>
   <script type="text/babel">
-    // Flujo real de Carlos: Tareas (inicio) -> toca una tarea -> Registrar
-    // interacción (aquí, un atajo directo: la Ficha real de por medio no
-    // está en este kit — ver NOTES.md). FAB "+" -> Nuevo prospecto.
-    // Flujo real de Marta: Dashboard (placeholder) -> Pipeline / Reportes / Config.
+    // Flujo real de Carlos: Tareas (inicio) -> toca una tarea -> Ficha ->
+    // "Registrar interacción". FAB "+" -> Nuevo prospecto.
+    // Flujo real de Marta: Dashboard -> alerta/KPI de riesgo -> Prospectos
+    // (filtrado) -> Ficha; o Pipeline -> Ficha.
     function App() {
       const [role, setRole] = React.useState(null);
       const [screen, setScreen] = React.useState('tareas');
       const [prospectId, setProspectId] = React.useState(null);
+      const [riskFilter, setRiskFilter] = React.useState(false);
 
       function enter(r) {
         setRole(r);
         setScreen(r === 'vendedor' ? 'tareas' : 'dashboard');
       }
       function logout() { setRole(null); }
-      function openProspect(id) { setProspectId(id); setScreen('registrar-interaccion'); }
+      function openProspect(id) { setProspectId(id); setScreen('ficha'); }
+      function goToRiesgo() { setRiskFilter(true); setScreen('prospectos'); }
 
       if (!role) return <Login onEnter={enter} />;
 
@@ -65,9 +68,16 @@
       if (screen === 'nuevo-prospecto') {
         body = <NuevoProspecto onClose={() => setScreen('tareas')} onSaved={() => setScreen('tareas')} />;
       } else if (screen === 'registrar-interaccion') {
-        body = <RegistrarInteraccion prospectId={prospectId} onClose={() => setScreen('tareas')} onSaved={() => setScreen('tareas')} />;
+        body = <RegistrarInteraccion prospectId={prospectId} onClose={() => setScreen('ficha')} onSaved={() => setScreen('ficha')} />;
+      } else if (screen === 'ficha') {
+        body = <Ficha role={role} prospectId={prospectId} onBack={() => setScreen(role === 'vendedor' ? 'tareas' : 'prospectos')}
+          onRegistrarInteraccion={(id) => { setProspectId(id); setScreen('registrar-interaccion'); }} />;
       } else if (screen === 'tareas') {
         body = <Tareas onOpenProspect={openProspect} />;
+      } else if (screen === 'dashboard') {
+        body = <Dashboard onGoToRiesgo={goToRiesgo} />;
+      } else if (screen === 'prospectos') {
+        body = <ProspectosList initialRiskFilter={riskFilter} onOpenProspect={openProspect} />;
       } else if (screen === 'pipeline') {
         body = <Pipeline role={role} onOpenProspect={openProspect} />;
       } else if (screen === 'mi-desempeno') {
@@ -76,14 +86,10 @@
         body = <Reportes />;
       } else if (screen === 'configuracion') {
         body = <Configuracion role={role} />;
-      } else if (screen === 'prospectos') {
-        body = <Placeholder title="Prospectos" />;
-      } else if (screen === 'dashboard') {
-        body = <Placeholder title="Dashboard" />;
       }
 
       return (
-        <Shell role={role} active={screen} onNavigate={setScreen} onLogout={logout}>
+        <Shell role={role} active={screen} onNavigate={(s) => { setRiskFilter(false); setScreen(s); }} onLogout={logout}>
           {body}
         </Shell>
       );
