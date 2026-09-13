@@ -20,6 +20,7 @@ import type * as pagination from "../pagination.js";
 import type * as permissions from "../permissions.js";
 import type * as prospects from "../prospects.js";
 import type * as sales from "../sales.js";
+import type * as seedDemo from "../seedDemo.js";
 import type * as testHelpers from "../testHelpers.js";
 import type * as timeline from "../timeline.js";
 import type * as users from "../users.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   permissions: typeof permissions;
   prospects: typeof prospects;
   sales: typeof sales;
+  seedDemo: typeof seedDemo;
   testHelpers: typeof testHelpers;
   timeline: typeof timeline;
   users: typeof users;
