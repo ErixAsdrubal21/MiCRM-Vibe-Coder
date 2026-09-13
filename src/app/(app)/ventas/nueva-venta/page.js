@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Icon } from "@/design/components/core/Icon.jsx";
@@ -18,12 +18,18 @@ import { todayISO } from "@/lib/dates.js";
  */
 export default function NuevaVentaDirecta() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedId = searchParams.get("prospect");
   const session = useSession();
   const prospectsData = useQuery(api.prospects.listMine, session?.role === "vendedor" ? {} : "skip");
   const createDirect = useMutation(api.sales.createDirect);
 
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(null);
+  // ICS-104: llegando desde la ficha (?prospect=<id>) salta el buscador —
+  // derivado en render, no en un efecto (evita el set-state-in-effect).
+  const [selectedOverride, setSelectedOverride] = useState(undefined);
+  const selected =
+    selectedOverride !== undefined ? selectedOverride : (prospectsData ?? []).find((p) => p._id === preselectedId) ?? null;
   const [amount, setAmount] = useState("");
   const [product, setProduct] = useState("");
   const [closedDate, setClosedDate] = useState("");
@@ -99,7 +105,7 @@ export default function NuevaVentaDirecta() {
                 key={p._id}
                 className="list-row"
                 style={{ border: "none", width: "100%", cursor: "pointer", textAlign: "left" }}
-                onClick={() => setSelected(p)}
+                onClick={() => setSelectedOverride(p)}
               >
                 <p className="list-row__title">{p.name}</p>
                 <Badge stage={p.stage} />
@@ -117,7 +123,7 @@ export default function NuevaVentaDirecta() {
                 type="button"
                 className="mn-button mn-button--ghost"
                 style={{ height: 32, padding: "0 10px", fontSize: 12.5 }}
-                onClick={() => setSelected(null)}
+                onClick={() => setSelectedOverride(null)}
               >
                 Cambiar
               </button>

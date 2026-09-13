@@ -10,8 +10,8 @@ import { Badge } from "@/design/components/core/Badge.jsx";
 import { Tag } from "@/design/components/core/Tag.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { useSession } from "@/lib/session.js";
-import { CHANNELS, CONTACT_TYPES, FOLLOW_UP_TYPES, CONTACT_ICON, STAGE_LABELS, contactTypeLabel, relativeFollowUpLabel } from "@/lib/prospects.js";
-import { OUTCOME_VALUES, OUTCOME_LABELS, RESOLUTION_LABELS } from "../../../../../shared/crmEnums.js";
+import { CHANNELS, CONTACT_TYPES, FOLLOW_UP_TYPES, CONTACT_ICON, STAGE_LABELS, LOSS_REASONS, contactTypeLabel, relativeFollowUpLabel } from "@/lib/prospects.js";
+import { OUTCOME_VALUES, OUTCOME_LABELS, RESOLUTION_LABELS, OPPORTUNITY_OPEN_STAGES } from "../../../../../shared/crmEnums.js";
 import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
 import StageChangePicker from "@/components/StageChangePicker.js";
 import "./ficha.css";
@@ -19,6 +19,10 @@ import "./ficha.css";
 const CHANNEL_LABEL_BY_VALUE = Object.fromEntries(CHANNELS.map((c) => [c.value, c.label]));
 const OUTCOME_TAG_VARIANT = { positivo: "success", negativo: "risk", neutro: "neutral", "sin-respuesta": "neutral" };
 const RESOLUTION_TAG_VARIANT = { hecho: "success", "no-contactado": "neutral", reprogramado: "neutral", cancelado: "risk" };
+
+function money(n) {
+  return `$${n.toLocaleString("es-MX")}`;
+}
 
 function formatEventDate(ms) {
   const d = new Date(ms);
@@ -35,11 +39,23 @@ export default function FichaProspecto() {
   const session = useSession();
   const prospect = useQuery(api.prospects.get, { id });
   const timeline = usePaginatedQuery(api.timeline.listByProspect, { prospectId: id }, { initialNumItems: 15 });
+  const opportunities = usePaginatedQuery(api.opportunities.listByProspect, { prospectId: id }, { initialNumItems: 5 });
+  const sales = usePaginatedQuery(api.sales.listByProspect, { prospectId: id }, { initialNumItems: 5 });
   const updateProspect = useMutation(api.prospects.update);
   const editInteraction = useMutation(api.interactions.edit);
   const removeInteraction = useMutation(api.interactions.remove);
   const completeFollowUp = useMutation(api.followUps.complete);
+  const updateOpportunity = useMutation(api.opportunities.update);
+  const winOpportunity = useMutation(api.opportunities.win);
+  const markOpportunityLost = useMutation(api.opportunities.markLost);
   const canEdit = session?.role === "vendedor";
+
+  // ICS-104 (B3): "venta anulada" en una oportunidad ganada se deriva de
+  // opportunity.saleId -> sale.voidedAt, sin campo nuevo — join en lectura
+  // sobre lo ya cargado para el bloque "Ventas" de esta misma ficha (ambos
+  // bloques comparten página; una venta anulada fuera de esa primera
+  // ventana de "Ver más" simplemente no se refleja aquí todavía).
+  const saleById = new Map(sales.results.map((s) => [s._id, s]));
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
@@ -61,6 +77,32 @@ export default function FichaProspecto() {
   const [reprogramType, setReprogramType] = useState("llamada");
   const [followUpBusy, setFollowUpBusy] = useState(false);
   const [followUpError, setFollowUpError] = useState("");
+
+  // Oportunidades (ICS-104): a lo más una fila con un panel de acción
+  // abierto; oppDraft se siembra al abrir el panel (mismo patrón que
+  // editDraft para interacciones) para no depender de props que pueden
+  // quedar obsoletas mientras el panel sigue abierto.
+  const [oppAction, setOppAction] = useState(null); // { id, kind: "editar"|"ganar"|"perdida" }
+  const [oppDraft, setOppDraft] = useState(null);
+  const [oppBusy, setOppBusy] = useState(false);
+  const [oppError, setOppError] = useState("");
+
+  function startOppAction(opportunity, kind) {
+    setOppError("");
+    setOppAction({ id: opportunity._id, kind });
+    if (kind === "editar") {
+      setOppDraft({
+        name: opportunity.name,
+        product: opportunity.product,
+        estimatedAmount: opportunity.estimatedAmount ?? "",
+        expectedCloseDate: opportunity.expectedCloseDate ?? "",
+      });
+    } else if (kind === "ganar") {
+      setOppDraft({ amount: opportunity.estimatedAmount ?? "", closedDate: todayISO() });
+    } else if (kind === "perdida") {
+      setOppDraft({ lossReason: "" });
+    }
+  }
 
   if (prospect === undefined) return null;
 
@@ -257,17 +299,12 @@ export default function FichaProspecto() {
         </div>
       )}
 
-      {prospect.stage === "ganado" && prospect.sale ? (
-        <div className="next-follow">
-          <span style={{ color: "var(--color-accent-pressed)", display: "inline-flex" }}>
-            <Icon name="dollar-sign" size={18} />
-          </span>
-          <span className="next-follow__txt">
-            Vendido: <b>${prospect.sale.amount.toLocaleString("es-MX")} · {prospect.sale.product}</b>
-          </span>
-        </div>
-      ) : (
-        <div className="next-follow" style={{ flexDirection: "column", alignItems: "stretch", gap: 0 }}>
+      {/* ICS-104: el bloque "Vendido: $X" atado a stage==="ganado" se quitó —
+          ese campo ya no existe (ICS-101 B5); el detalle de venta vive ahora
+          en el bloque "Ventas" de abajo, y una ganada no implica que este
+          prospecto ya no tenga seguimiento (son conceptos independientes,
+          ICS-98 B2). */}
+      <div className="next-follow" style={{ flexDirection: "column", alignItems: "stretch", gap: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ color: "var(--color-accent-pressed)", display: "inline-flex" }}>
               <Icon name="calendar-clock" size={18} />
@@ -323,6 +360,125 @@ export default function FichaProspecto() {
 
           {followUpError && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: "8px 0 0" }}>{followUpError}</p>}
         </div>
+
+      <p className="section-label">Oportunidades{prospect.openOpportunitiesCount > 0 && ` · ${money(prospect.openPipelineAmount)} en pipeline`}</p>
+      {canEdit && (
+        <Button
+          variant="secondary"
+          onClick={() => router.push(`/ventas/nueva-oportunidad?prospect=${prospect._id}`)}
+        >
+          + Nueva oportunidad
+        </Button>
+      )}
+      {opportunities.results.length === 0 ? (
+        <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--color-mute)" }}>
+          {opportunities.status === "LoadingFirstPage" ? "Cargando..." : "Sin oportunidades registradas."}
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {opportunities.results.map((o) => (
+            <OpportunityRow
+              key={o._id}
+              opportunity={o}
+              canEdit={canEdit}
+              voidedSale={o.saleId ? saleById.get(o.saleId) : null}
+              action={oppAction?.id === o._id ? oppAction.kind : null}
+              draft={oppDraft}
+              onDraftChange={setOppDraft}
+              busy={oppBusy}
+              error={oppAction?.id === o._id ? oppError : ""}
+              onStart={(kind) => startOppAction(o, kind)}
+              onCancel={() => setOppAction(null)}
+              onSubmitEdit={async (e) => {
+                e.preventDefault();
+                setOppBusy(true);
+                setOppError("");
+                try {
+                  await updateOpportunity({
+                    id: o._id,
+                    name: oppDraft.name,
+                    product: oppDraft.product,
+                    estimatedAmount: Number(oppDraft.estimatedAmount),
+                    expectedCloseDate: oppDraft.expectedCloseDate || undefined,
+                  });
+                  setOppAction(null);
+                } catch (err) {
+                  setOppError(err.message ?? "No se pudo guardar.");
+                } finally {
+                  setOppBusy(false);
+                }
+              }}
+              onSubmitWin={async (e) => {
+                e.preventDefault();
+                setOppBusy(true);
+                setOppError("");
+                try {
+                  await winOpportunity({ id: o._id, amount: Number(oppDraft.amount), closedDate: oppDraft.closedDate || undefined });
+                  setOppAction(null);
+                } catch (err) {
+                  setOppError(err.message ?? "No se pudo registrar la venta.");
+                } finally {
+                  setOppBusy(false);
+                }
+              }}
+              onSubmitLost={async () => {
+                if (!oppDraft.lossReason) return setOppError("Selecciona un motivo antes de continuar.");
+                setOppBusy(true);
+                setOppError("");
+                try {
+                  await markOpportunityLost({ id: o._id, lossReason: oppDraft.lossReason });
+                  setOppAction(null);
+                } catch (err) {
+                  setOppError(err.message ?? "No se pudo marcar como perdida.");
+                } finally {
+                  setOppBusy(false);
+                }
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {opportunities.status === "CanLoadMore" && (
+        <button className="mn-button mn-button--ghost" style={{ width: "100%" }} onClick={() => opportunities.loadMore(5)}>
+          Ver más
+        </button>
+      )}
+
+      <p className="section-label">Ventas{prospect.salesCount > 0 && ` · ${money(prospect.salesTotalAmount)} en ${prospect.salesCount} venta${prospect.salesCount === 1 ? "" : "s"}`}</p>
+      {canEdit && (
+        <Button
+          variant="secondary"
+          onClick={() => router.push(`/ventas/nueva-venta?prospect=${prospect._id}`)}
+        >
+          + Registrar venta directa
+        </Button>
+      )}
+      {sales.results.length === 0 ? (
+        <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--color-mute)" }}>
+          {sales.status === "LoadingFirstPage" ? "Cargando..." : "Sin ventas registradas."}
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {sales.results.map((s) => (
+            <button
+              key={s._id}
+              className="list-row"
+              style={{ border: "none", width: "100%", cursor: "pointer", textAlign: "left", opacity: s.voidedAt ? 0.6 : 1 }}
+              onClick={() => router.push(`/ventas/${s._id}`)}
+            >
+              <div>
+                <p className="list-row__title">{money(s.amount)} · {s.product}</p>
+                <p className="list-row__meta">{new Date(s.closedAt).toLocaleDateString("es-MX")}</p>
+              </div>
+              {s.voidedAt && <Tag variant="risk">Venta anulada</Tag>}
+            </button>
+          ))}
+        </div>
+      )}
+      {sales.status === "CanLoadMore" && (
+        <button className="mn-button mn-button--ghost" style={{ width: "100%" }} onClick={() => sales.loadMore(5)}>
+          Ver más
+        </button>
       )}
 
       <p className="section-label">Historial de la relación</p>
@@ -523,4 +679,133 @@ function TimelineEvent({
   }
 
   return null;
+}
+
+/**
+ * ICS-104 — una fila de oportunidad en la ficha. Abierta: nombre/producto/
+ * monto (o "Monto pendiente")/etapa/fecha esperada + Editar/Ganar/Marcar
+ * perdida (solo dueño). Cerrada: desenlace, y si es ganada con la venta
+ * anulada, "Venta anulada" en vez de "Ganada" a secas (B3, derivado de
+ * `voidedSale`, sin campo nuevo).
+ */
+function OpportunityRow({ opportunity: o, canEdit, voidedSale, action, draft, onDraftChange, busy, error, onStart, onCancel, onSubmitEdit, onSubmitWin, onSubmitLost }) {
+  const isOpen = OPPORTUNITY_OPEN_STAGES.includes(o.stage);
+
+  if (action === "editar") {
+    return (
+      <form className="id-card" style={{ gap: 10 }} onSubmit={onSubmitEdit}>
+        <div className="field-group">
+          <label className="field-label" htmlFor={`oe-nombre-${o._id}`}>Nombre</label>
+          <label className="mn-input mn-input--field">
+            <input id={`oe-nombre-${o._id}`} value={draft.name} onChange={(e) => onDraftChange({ ...draft, name: e.target.value })}
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }} />
+          </label>
+        </div>
+        <div className="field-group">
+          <label className="field-label" htmlFor={`oe-producto-${o._id}`}>Producto</label>
+          <label className="mn-input mn-input--field">
+            <input id={`oe-producto-${o._id}`} value={draft.product} onChange={(e) => onDraftChange({ ...draft, product: e.target.value })}
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }} />
+          </label>
+        </div>
+        <div className="field-group">
+          <label className="field-label" htmlFor={`oe-monto-${o._id}`}>Monto estimado</label>
+          <label className="mn-input mn-input--field">
+            <input id={`oe-monto-${o._id}`} type="number" min="0" step="0.01" value={draft.estimatedAmount}
+              onChange={(e) => onDraftChange({ ...draft, estimatedAmount: e.target.value })}
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }} />
+          </label>
+        </div>
+        <div className="field-group">
+          <label className="field-label" htmlFor={`oe-fecha-${o._id}`}>Fecha esperada</label>
+          <label className="mn-input mn-input--field">
+            <input id={`oe-fecha-${o._id}`} type="date" value={draft.expectedCloseDate}
+              onChange={(e) => onDraftChange({ ...draft, expectedCloseDate: e.target.value })}
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }} />
+          </label>
+        </div>
+        {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 }}>{error}</p>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button type="button" variant="secondary" full disabled={busy} onClick={onCancel}>Cancelar</Button>
+          <Button type="submit" variant="primary" full disabled={busy}>{busy ? "Guardando..." : "Guardar"}</Button>
+        </div>
+      </form>
+    );
+  }
+
+  if (action === "ganar") {
+    return (
+      <form className="id-card" style={{ gap: 10 }} onSubmit={onSubmitWin}>
+        <p className="field-label">Ganar oportunidad</p>
+        <div className="field-group">
+          <label className="field-label" htmlFor={`ow-monto-${o._id}`}>Monto final</label>
+          <label className="mn-input mn-input--field">
+            <input id={`ow-monto-${o._id}`} type="number" min="0" step="0.01" value={draft.amount}
+              onChange={(e) => onDraftChange({ ...draft, amount: e.target.value })}
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }} />
+          </label>
+        </div>
+        <div className="field-group">
+          <label className="field-label" htmlFor={`ow-fecha-${o._id}`}>Fecha de cierre</label>
+          <label className="mn-input mn-input--field">
+            <input id={`ow-fecha-${o._id}`} type="date" max={todayISO()} value={draft.closedDate}
+              onChange={(e) => onDraftChange({ ...draft, closedDate: e.target.value })}
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }} />
+          </label>
+        </div>
+        {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 }}>{error}</p>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button type="button" variant="secondary" full disabled={busy} onClick={onCancel}>Cancelar</Button>
+          <Button type="submit" variant="primary" full disabled={busy}>{busy ? "Guardando..." : "Marcar como ganada"}</Button>
+        </div>
+      </form>
+    );
+  }
+
+  if (action === "perdida") {
+    return (
+      <div className="id-card" style={{ gap: 10 }}>
+        <p className="field-label">Motivo de la pérdida</p>
+        <div className="chip-row">
+          {LOSS_REASONS.map((r) => (
+            <button key={r.value} type="button" className={`chip${draft.lossReason === r.value ? " selected" : ""}`}
+              onClick={() => onDraftChange({ ...draft, lossReason: r.value })}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+        {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 }}>{error}</p>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button variant="secondary" full disabled={busy} onClick={onCancel}>Cancelar</Button>
+          <Button variant="danger" full disabled={busy} onClick={onSubmitLost}>{busy ? "Guardando..." : "Marcar como perdida"}</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="list-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <p className="list-row__title">{o.name}</p>
+        <Badge stage={o.stage} />
+      </div>
+      <p className="list-row__meta">{o.product}</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        {o.estimatedAmount != null ? (
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: 13.5, fontWeight: 700, color: "var(--color-ink)" }}>{money(o.estimatedAmount)}</span>
+        ) : (
+          <Tag variant="neutral">Monto pendiente</Tag>
+        )}
+        {o.stage === "ganada" && voidedSale?.voidedAt && <Tag variant="risk">Venta anulada</Tag>}
+        {isOpen && o.expectedCloseDate && <span className="list-row__meta">Esperada: {o.expectedCloseDate}</span>}
+      </div>
+      {canEdit && isOpen && (
+        <div className="follow-actions">
+          <Button variant="secondary" onClick={() => onStart("editar")}>Editar</Button>
+          <Button variant="secondary" onClick={() => onStart("ganar")}>Ganar</Button>
+          <Button variant="secondary" onClick={() => onStart("perdida")}>Marcar perdida</Button>
+        </div>
+      )}
+    </div>
+  );
 }
