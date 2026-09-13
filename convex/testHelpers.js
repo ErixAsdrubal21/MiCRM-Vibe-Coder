@@ -1,8 +1,15 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
-import { recordTimelineEvent, syncPendingFollowUpOwner } from "./lib";
+import { recordTimelineEvent, syncPendingFollowUpOwner, syncOpenOpportunitiesOwner } from "./lib";
 
-const SMOKE_PREFIXES = ["[SMOKE ICS-92]", "[SMOKE ICS-85]", "[SMOKE ICS-79]", "[SMOKE ICS-80]", "[SMOKE ICS-81]"];
+const SMOKE_PREFIXES = [
+  "[SMOKE ICS-92]",
+  "[SMOKE ICS-85]",
+  "[SMOKE ICS-79]",
+  "[SMOKE ICS-80]",
+  "[SMOKE ICS-81]",
+  "[SMOKE ICS-100]",
+];
 
 /** Rechaza cualquier id cuyo prospecto no sea de prueba (o no exista). */
 async function requireSmokeProspect(ctx, id) {
@@ -38,6 +45,7 @@ export const deleteProspectCascade = internalMutation({
       ["followUps", "by_prospect"],
       ["sales", "by_prospect"],
       ["timelineEvents", "by_prospect_and_at"],
+      ["opportunities", "by_prospect"],
     ]);
     let deleted = 0;
     for (const [table, index] of tables) {
@@ -176,11 +184,19 @@ export const reassignProspectForSmoke = internalMutation({
     await requireSmokeProspect(ctx, prospectId);
     await ctx.db.patch(prospectId, { ownerId: newOwnerId });
     await syncPendingFollowUpOwner(ctx, prospectId, newOwnerId);
+    await syncOpenOpportunitiesOwner(ctx, prospectId, newOwnerId);
     const pending = await ctx.db
       .query("followUps")
       .withIndex("by_prospect", (q) => q.eq("prospectId", prospectId))
       .filter((q) => q.eq(q.field("status"), "pendiente"))
       .first();
-    return { pendingFollowUpOwnerId: pending?.ownerId ?? null };
+    const opportunities = await ctx.db
+      .query("opportunities")
+      .withIndex("by_prospect", (q) => q.eq("prospectId", prospectId))
+      .collect();
+    return {
+      pendingFollowUpOwnerId: pending?.ownerId ?? null,
+      opportunityOwnerIds: opportunities.map((o) => ({ id: o._id, stage: o.stage, ownerId: o.ownerId })),
+    };
   },
 });
