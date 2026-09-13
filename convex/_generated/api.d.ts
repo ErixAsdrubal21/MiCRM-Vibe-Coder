@@ -18,6 +18,7 @@ import type * as migrations from "../migrations.js";
 import type * as permissions from "../permissions.js";
 import type * as prospects from "../prospects.js";
 import type * as testHelpers from "../testHelpers.js";
+import type * as timeline from "../timeline.js";
 import type * as users from "../users.js";
 import type * as validators from "../validators.js";
 
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   permissions: typeof permissions;
   prospects: typeof prospects;
   testHelpers: typeof testHelpers;
+  timeline: typeof timeline;
   users: typeof users;
   validators: typeof validators;
 }>;
