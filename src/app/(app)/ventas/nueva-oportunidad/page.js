@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Icon } from "@/design/components/core/Icon.jsx";
@@ -20,12 +20,20 @@ const STAGE_CHIPS = [
 /** ICS-103 — "Nueva oportunidad": mismo patrón de selector de cliente que "Nueva tarea" (ICS-92). */
 export default function NuevaOportunidad() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedId = searchParams.get("prospect");
   const session = useSession();
   const prospectsData = useQuery(api.prospects.listMine, session?.role === "vendedor" ? {} : "skip");
   const createOpportunity = useMutation(api.opportunities.create);
 
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState(null);
+  // ICS-104: llegando desde la ficha (?prospect=<id>) salta el buscador —
+  // derivado en render, no en un efecto (evita el set-state-in-effect).
+  // `undefined` = todavía sigue el default de la URL; `null` = el usuario
+  // le dio "Cambiar" y quiere volver a buscar.
+  const [selectedOverride, setSelectedOverride] = useState(undefined);
+  const selected =
+    selectedOverride !== undefined ? selectedOverride : (prospectsData ?? []).find((p) => p._id === preselectedId) ?? null;
   const [name, setName] = useState("");
   const [product, setProduct] = useState("");
   const [estimatedAmount, setEstimatedAmount] = useState("");
@@ -106,7 +114,7 @@ export default function NuevaOportunidad() {
                 key={p._id}
                 className="list-row"
                 style={{ border: "none", width: "100%", cursor: "pointer", textAlign: "left" }}
-                onClick={() => setSelected(p)}
+                onClick={() => setSelectedOverride(p)}
               >
                 <p className="list-row__title">{p.name}</p>
                 <Badge stage={p.stage} />
@@ -124,7 +132,7 @@ export default function NuevaOportunidad() {
                 type="button"
                 className="mn-button mn-button--ghost"
                 style={{ height: 32, padding: "0 10px", fontSize: 12.5 }}
-                onClick={() => setSelected(null)}
+                onClick={() => setSelectedOverride(null)}
               >
                 Cambiar
               </button>
