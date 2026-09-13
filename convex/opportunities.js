@@ -2,28 +2,20 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireVendedor, requireAuthenticatedUser, requireOwnedProspect, requireProspectRead } from "./permissions";
-import { recordTimelineEvent, isValidCalendarDate } from "./lib";
+import { recordTimelineEvent, isValidCalendarDate, requireBoundedText, resolveClosedAt } from "./lib";
 import { collectFilteredPage, hydrateByIds } from "./pagination";
 import { opportunityStage, lossReason } from "./validators.js";
 import { OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
 
 /**
- * ICS-100 — backend de oportunidades (fase 3 de milestone 7). Mutations y
- * queries de oportunidad SIN cierre a venta: ganar una oportunidad
- * (`opportunities.win`) vive en ICS-101 junto con `convex/sales.js`, porque
- * crea la venta en la misma transacción. Contrato completo: ICS-98.
+ * ICS-100/101 — backend de oportunidades. `create`/`update`/`markLost`/
+ * `listByProspect`/`list` son ICS-100; `win` es ICS-101 (cierra transaccional
+ * a venta, junto con `convex/sales.js`). Contrato completo: ICS-98.
  *
  * Aislamiento de cartera desde el día 1: `requireOwnedProspect` en toda
  * mutation (vendedor dueño del prospecto); `requireProspectRead` en
  * `listByProspect` (admin lee todo, vendedor solo lo suyo — B8).
  */
-
-function requireBoundedText(value, label, min, max) {
-  const trimmed = typeof value === "string" ? value.trim() : "";
-  if (trimmed.length < min) throw new Error(`El ${label} no puede estar vacío.`);
-  if (trimmed.length > max) throw new Error(`El ${label} no puede tener más de ${max} caracteres.`);
-  return trimmed;
-}
 
 function requireExpectedCloseDate(expectedCloseDate) {
   if (expectedCloseDate === undefined) return undefined;
@@ -128,6 +120,73 @@ export const markLost = mutation({
       type: "oportunidad-perdida",
       actorId: user._id,
       opportunityId: id,
+    });
+    return ctx.db.get(id);
+  },
+});
+
+/**
+ * ICS-101 — gana la oportunidad: crea la venta y cierra la oportunidad EN LA
+ * MISMA mutation (atómico; la OCC de Convex protege llamadas concurrentes).
+ *
+ * Invariante "1 venta por oportunidad" (B7) — un índice no la garantiza por
+ * sí solo, se comprueba aquí dentro: rechaza si `opportunity.saleId` ya está
+ * definido, y rechaza si `sales.by_opportunity` ya devuelve una fila (belt
+ * and suspenders — cualquiera de los dos caminos detecta una 2ª venta).
+ */
+export const win = mutation({
+  args: {
+    id: v.id("opportunities"),
+    amount: v.number(),
+    product: v.optional(v.string()),
+    closedDate: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, amount, product, closedDate }) => {
+    const opportunity = await ctx.db.get(id);
+    if (!opportunity) throw new Error("Oportunidad no encontrada.");
+    const { user } = await requireOwnedProspect(ctx, opportunity.prospectId);
+
+    if (!OPPORTUNITY_OPEN_STAGES.includes(opportunity.stage)) {
+      throw new Error("Esta oportunidad ya está cerrada.");
+    }
+    if (opportunity.saleId) {
+      throw new Error("Esta oportunidad ya tiene una venta registrada.");
+    }
+    const existingSale = await ctx.db
+      .query("sales")
+      .withIndex("by_opportunity", (q) => q.eq("opportunityId", id))
+      .first();
+    if (existingSale) {
+      throw new Error("Esta oportunidad ya tiene una venta registrada.");
+    }
+
+    if (!amount || amount <= 0) throw new Error("El monto debe ser mayor a 0.");
+    const closedAt = resolveClosedAt(closedDate);
+    const cleanProduct = product !== undefined ? requireBoundedText(product, "producto", 1, 120) : opportunity.product;
+
+    const saleId = await ctx.db.insert("sales", {
+      prospectId: opportunity.prospectId,
+      amount,
+      product: cleanProduct,
+      closedAt,
+      closedBy: user._id,
+      ownerId: opportunity.ownerId,
+      opportunityId: id,
+    });
+    await ctx.db.patch(id, { stage: "ganada", closedAt, closedBy: user._id, saleId });
+    await recordTimelineEvent(ctx, {
+      prospectId: opportunity.prospectId,
+      at: closedAt,
+      type: "oportunidad-ganada",
+      actorId: user._id,
+      opportunityId: id,
+    });
+    await recordTimelineEvent(ctx, {
+      prospectId: opportunity.prospectId,
+      at: closedAt,
+      type: "venta",
+      actorId: user._id,
+      saleId,
     });
     return ctx.db.get(id);
   },

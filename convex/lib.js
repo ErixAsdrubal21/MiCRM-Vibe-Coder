@@ -193,3 +193,32 @@ export function endOfBusinessTodayMs() {
 export function startOfBusinessTodayMs() {
   return Date.parse(`${businessToday()}T00:00:00-06:00`);
 }
+
+/**
+ * ICS-99..101 — texto `trim`ado dentro de un rango de longitud, o error.
+ * Compartido por `opportunities.js` y `sales.js` (name/product/voidReason).
+ */
+export function requireBoundedText(value, label, min, max) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (trimmed.length < min) throw new Error(`El ${label} no puede estar vacío.`);
+  if (trimmed.length > max) throw new Error(`El ${label} no puede tener más de ${max} caracteres.`);
+  return trimmed;
+}
+
+/**
+ * ICS-101 — `closedDate?` ("YYYY-MM-DD", opcional) → timestamp de cierre.
+ * Ausente = ahora mismo. Presente: debe ser una fecha calendario válida y NO
+ * futura respecto al día de negocio (`businessToday()`) — una venta no se
+ * registra "para mañana". Compartido por `opportunities.win` y
+ * `sales.createDirect`.
+ */
+export function resolveClosedAt(closedDate) {
+  if (closedDate === undefined) return Date.now();
+  if (!isValidCalendarDate(closedDate)) {
+    throw new Error('Fecha de cierre inválida (usa "YYYY-MM-DD").');
+  }
+  if (closedDate > businessToday()) {
+    throw new Error("La fecha de cierre no puede ser futura.");
+  }
+  return calendarDateToMs(closedDate);
+}

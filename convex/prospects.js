@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./permissions";
 import { lastContactAt, pendingFollowUp, recordTimelineEvent } from "./lib";
 import { channel, stage, lossReason } from "./validators.js";
+import { OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
 
 /** ICS-13 Lista: todos los prospectos + lastContactAt. Sin interactions/nextFollowUp, la Lista no los usa. */
 export const list = query({
@@ -74,12 +75,18 @@ export const pipeline = query({
 });
 
 /**
- * ICS-12 Ficha: un prospecto + su followUp pendiente + su venta (si está Ganado).
+ * ICS-12 Ficha: un prospecto + su followUp pendiente + resúmenes de
+ * oportunidades/ventas.
  *
  * ICS-86: ya NO devuelve el array completo `interactions` — la ficha muestra
- * el historial vía `timeline.listByProspect` (ICS-85), paginado. Cargarlo
- * completo aquí recreaba justo el problema que ICS-81/85 resuelven para el
- * resto del CRM (un array sin límite que crece para siempre).
+ * el historial vía `timeline.listByProspect` (ICS-85), paginado.
+ *
+ * ICS-101 (B5): tampoco devuelve arrays de `opportunities`/`sales` ni el
+ * viejo campo `sale` (atado a `stage === "ganado"`, invariante que ya no
+ * existe desde ICS-99) — solo conteos/sumas. La ficha usa
+ * `opportunities.listByProspect` + `sales.listByProspect` (paginadas,
+ * ICS-104) para el detalle. Todo acotado a ESTA relación, nunca a la tabla
+ * completa — mismo principio que evitó el array ilimitado de interacciones.
  */
 export const get = query({
   args: { id: v.id("prospects") },
@@ -88,11 +95,33 @@ export const get = query({
     const prospect = await ctx.db.get(id);
     if (!prospect) return null;
     const nextFollowUp = await pendingFollowUp(ctx, id);
-    const sale =
-      prospect.stage === "ganado"
-        ? await ctx.db.query("sales").withIndex("by_prospect", (q) => q.eq("prospectId", id)).first()
-        : null;
-    return { ...prospect, nextFollowUp, sale };
+
+    const opportunities = await ctx.db
+      .query("opportunities")
+      .withIndex("by_prospect", (q) => q.eq("prospectId", id))
+      .collect();
+    const openOpportunities = opportunities.filter((o) => OPPORTUNITY_OPEN_STAGES.includes(o.stage));
+    const openOpportunitiesCount = openOpportunities.length;
+    const openPipelineAmount = openOpportunities.reduce((sum, o) => sum + (o.estimatedAmount ?? 0), 0);
+
+    const sales = await ctx.db
+      .query("sales")
+      .withIndex("by_prospect", (q) => q.eq("prospectId", id))
+      .collect();
+    const activeSales = sales.filter((s) => !s.voidedAt);
+    const salesCount = activeSales.length;
+    const salesTotalAmount = activeSales.reduce((sum, s) => sum + s.amount, 0);
+    const lastSaleAt = activeSales.length ? Math.max(...activeSales.map((s) => s.closedAt)) : null;
+
+    return {
+      ...prospect,
+      nextFollowUp,
+      openOpportunitiesCount,
+      openPipelineAmount,
+      salesCount,
+      salesTotalAmount,
+      lastSaleAt,
+    };
   },
 });
 
