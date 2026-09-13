@@ -36,3 +36,31 @@ export async function requireProspect(ctx, id) {
   if (!prospect) throw new Error("Prospecto no encontrado.");
   return prospect;
 }
+
+/**
+ * ICS-99/100 — aislamiento de cartera para MUTATIONS: rol vendedor + dueño
+ * del prospecto. Distinto de `requireProspectRead` (admite lectura de admin).
+ * Reutilizable por ICS-94 cuando generalice el aislamiento al resto del CRM.
+ */
+export async function requireOwnedProspect(ctx, prospectId) {
+  const user = await requireVendedor(ctx);
+  const prospect = await requireProspect(ctx, prospectId);
+  if (prospect.ownerId !== user._id) {
+    throw new Error("No puedes operar sobre un prospecto que no es tuyo.");
+  }
+  return { user, prospect };
+}
+
+/**
+ * ICS-99/100 (B8) — aislamiento de cartera para QUERIES individuales
+ * (`opportunities.listByProspect`, `sales.listByProspect`, `sales.getById`):
+ * administrador lee cualquier prospecto; vendedor solo el suyo; cualquier
+ * otro caso lo rechaza el servidor.
+ */
+export async function requireProspectRead(ctx, prospectId) {
+  const user = await requireAuthenticatedUser(ctx);
+  const prospect = await requireProspect(ctx, prospectId);
+  if (user.role === "administrador") return { user, prospect };
+  if (user.role === "vendedor" && prospect.ownerId === user._id) return { user, prospect };
+  throw new Error("No puedes ver la información de este prospecto.");
+}
