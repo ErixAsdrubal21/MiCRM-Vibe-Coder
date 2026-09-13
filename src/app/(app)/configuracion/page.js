@@ -8,6 +8,7 @@ import { api } from "../../../../convex/_generated/api";
 import TopBar from "@/nav/TopBar.js";
 import { Button } from "@/design/components/core/Button.jsx";
 import { Icon } from "@/design/components/core/Icon.jsx";
+import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { useSession } from "@/lib/session.js";
 import "./configuracion.css";
 
@@ -59,7 +60,7 @@ export default function Configuracion() {
       )}
 
       {session.role === "administrador" && (
-        <TeamSection showInviteForm={showInviteForm} setShowInviteForm={setShowInviteForm} />
+        <TeamSection ownUserId={session.id} showInviteForm={showInviteForm} setShowInviteForm={setShowInviteForm} />
       )}
 
       <div style={{ flex: 1 }} />
@@ -160,7 +161,7 @@ function ChangePasswordForm({ onDone }) {
   );
 }
 
-function TeamSection({ showInviteForm, setShowInviteForm }) {
+function TeamSection({ ownUserId, showInviteForm, setShowInviteForm }) {
   const team = useQuery(api.users.listTeam, {});
 
   return (
@@ -171,14 +172,7 @@ function TeamSection({ showInviteForm, setShowInviteForm }) {
           Cargando...
         </p>
       ) : (
-        team.map((member) => (
-          <div className="team-row" key={member._id}>
-            <div>
-              <p className="team-row__name">{member.name}</p>
-              <p className="team-row__role">{ROLE_LABEL[member.role]}</p>
-            </div>
-          </div>
-        ))
+        team.map((member) => <TeamMemberRow key={member._id} member={member} isSelf={member._id === ownUserId} />)
       )}
 
       {!showInviteForm ? (
@@ -189,6 +183,68 @@ function TeamSection({ showInviteForm, setShowInviteForm }) {
         <InviteUserForm onDone={() => setShowInviteForm(false)} />
       )}
     </>
+  );
+}
+
+/**
+ * Fila de miembro del equipo + "restablecer contraseña" (hallazgo de
+ * auditoría PRD↔app, 2026-09-13 — ver `resetUserPassword` en convex/users.js
+ * para el porqué de esta forma en vez de un correo de recuperación). No se
+ * ofrece sobre la propia fila del admin — para uno mismo ya existe "Cambiar
+ * contraseña" arriba, que sí exige la contraseña actual.
+ */
+function TeamMemberRow({ member, isSelf }) {
+  const resetUserPassword = useAction(api.users.resetUserPassword);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [tempPassword, setTempPassword] = useState(null);
+
+  async function handleConfirm() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await resetUserPassword({ userId: member._id });
+      setTempPassword(result.tempPassword);
+      setConfirming(false);
+    } catch (err) {
+      setError(err.message ?? "No se pudo restablecer la contraseña.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (tempPassword) {
+    return (
+      <div className="settings-card">
+        <div className="temp-password-banner">
+          <p className="temp-password-banner__label">Contraseña temporal para {member.name}</p>
+          <p className="temp-password-banner__value">{tempPassword}</p>
+          <p className="temp-password-banner__note">Cópiala y compártesela — no se volverá a mostrar. Cerró sus sesiones activas.</p>
+        </div>
+        <Button variant="secondary" full onClick={() => setTempPassword(null)}>Listo</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="team-row">
+      <div>
+        <p className="team-row__name">{member.name}</p>
+        <p className="team-row__role">{ROLE_LABEL[member.role]}</p>
+        {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 11.5, color: "var(--color-critical)", margin: "2px 0 0" }}>{error}</p>}
+      </div>
+      {!isSelf && (
+        confirming ? (
+          <div style={{ display: "flex", gap: 6 }}>
+            <Button variant="secondary" disabled={busy} onClick={() => setConfirming(false)}>No</Button>
+            <Button variant="primary" disabled={busy} onClick={handleConfirm}>{busy ? "..." : "Sí, restablecer"}</Button>
+          </div>
+        ) : (
+          <IconButton icon="key-round" label={`Restablecer contraseña de ${member.name}`} onClick={() => setConfirming(true)} />
+        )
+      )}
+    </div>
   );
 }
 

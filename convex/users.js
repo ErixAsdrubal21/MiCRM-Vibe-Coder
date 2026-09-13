@@ -1,4 +1,4 @@
-import { action, internalAction, internalMutation, query } from "./_generated/server";
+import { action, internalAction, internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
   createAccount,
@@ -173,5 +173,49 @@ export const changeOwnPassword = action({
     }
 
     return "ok";
+  },
+});
+
+/** Fila `users` por id — solo para `resetUserPassword`, que corre en una action sin `ctx.db`. */
+export const getUserById = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => ctx.db.get(userId),
+});
+
+/**
+ * "Olvidé mi contraseña", versión sin correo (hallazgo de auditoría PRD↔app,
+ * 2026-09-13): el sistema es cerrado — sin autoregistro, sin proveedor de
+ * email transaccional configurado — así que no hay a dónde mandar un enlace
+ * de recuperación. La recuperación real es la misma que ya usa `inviteUser`:
+ * un administrador genera una contraseña temporal y se la comparte fuera del
+ * sistema (verbalmente, por WhatsApp, etc.); el usuario la cambia por la
+ * suya con `changeOwnPassword` en su próximo login. El login expone esto
+ * como "pide a tu administrador que te la restablezca", no como un enlace
+ * de autoservicio — no prometer lo que el sistema no hace.
+ *
+ * `modifyAccountCredentials` reemplaza el secreto de la cuenta `password`
+ * existente sin necesitar la contraseña anterior (a diferencia de
+ * `changeOwnPassword`, que si la exige porque el dueño está actuando sobre
+ * sí mismo). Invalida TODAS las sesiones activas del usuario objetivo —una
+ * contraseña que ya no conoce nadie más que el admin no debe dejar sesiones
+ * vivas colgando.
+ */
+export const resetUserPassword = action({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const me = await ctx.runQuery(api.users.currentUser, {});
+    if (!me || me.role !== "administrador") {
+      throw new Error("Solo un administrador puede restablecer contraseñas.");
+    }
+
+    const target = await ctx.runQuery(internal.users.getUserById, { userId });
+    if (!target) throw new Error("Usuario no encontrado.");
+    if (!target.email) throw new Error("Ese usuario no tiene correo asociado.");
+
+    const tempPassword = generateTempPassword();
+    await modifyAccountCredentials(ctx, { provider: "password", account: { id: target.email, secret: tempPassword } });
+    await invalidateSessions(ctx, { userId: target._id });
+
+    return { tempPassword };
   },
 });

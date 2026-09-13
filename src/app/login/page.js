@@ -21,6 +21,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [showForgotHelp, setShowForgotHelp] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -105,7 +106,16 @@ export default function Login() {
         {googleSubmitting ? "Conectando..." : "Continuar con Google"}
       </Button>
 
-      <a className="forgot" href="#" onClick={(e) => e.preventDefault()}>Olvidé mi contraseña</a>
+      {showForgotHelp ? (
+        <p className="forgot-help">
+          Pide a tu administrador que te restablezca la contraseña desde Configuración » Equipo — te dará una
+          temporal para entrar y luego la cambias tú desde tu cuenta.
+        </p>
+      ) : (
+        <button type="button" className="forgot" onClick={() => setShowForgotHelp(true)}>
+          Olvidé mi contraseña
+        </button>
+      )}
     </div>
   );
 }
