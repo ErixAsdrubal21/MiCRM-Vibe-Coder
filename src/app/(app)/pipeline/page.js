@@ -46,7 +46,9 @@ export default function Pipeline() {
 
   return (
     <>
-      <TopBar title="Pipeline de ventas" />
+      {/* ICS-103: renombrado de "Pipeline de ventas" — el pipeline comercial
+          real (oportunidades) vive en /ventas; esto es el ciclo del lead. */}
+      <TopBar title="Embudo de prospectos" />
 
       {groups.map((group) => (
         <div className="stage-block" key={group.stage}>

@@ -1,0 +1,72 @@
+/* ICS-103 — pantalla global /ventas. Reutiliza .list-row/.chip-row/
+   .mn-period-toggle/.mn-badge/.mn-tag del sistema de diseño; aquí solo lo
+   específico de esta pantalla. */
+
+.filters-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.opp-row,
+.sale-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.opp-row__head,
+.sale-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.opp-row__amount,
+.sale-row__amount {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+.opp-row__meta,
+.sale-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-mute);
+}
+.sale-row--voided { opacity: 0.6; }
+
+.empty-state {
+  font-family: var(--font-ui);
+  color: var(--color-mute);
+  font-size: 13.5px;
+  text-align: center;
+  padding: 32px 12px;
+}
+
+/* Detalle de venta (/ventas/[id]) — mismas clases que ficha.css (id-card/
+   next-follow/action-row); se duplican aquí en vez de importar la hoja de
+   otra ruta, cada pantalla es dueña de su propio CSS (patrón del proyecto). */
+.id-card { background: var(--color-surface); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.id-card__head { display: flex; justify-content: space-between; align-items: flex-start; }
+.id-card__name { font-family: var(--font-ui); font-size: 18px; font-weight: 700; margin: 0; color: var(--color-ink); }
+.id-card__biz { font-family: var(--font-ui); font-size: 13px; color: var(--color-mute); margin: 2px 0 0; }
+.id-row { display: flex; align-items: center; gap: 8px; font-family: var(--font-ui); font-size: 13px; color: var(--color-body); }
+.next-follow { background: var(--color-accent-tint); border-radius: var(--radius-md); padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+.next-follow__txt { font-family: var(--font-ui); font-size: 12.5px; font-weight: 600; color: var(--color-ink); }
+.action-row { display: flex; gap: 8px; }
+.action-row .mn-button { flex: 1; }
