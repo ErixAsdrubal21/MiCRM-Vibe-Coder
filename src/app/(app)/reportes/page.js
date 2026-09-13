@@ -7,6 +7,7 @@ import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { PeriodToggle } from "@/design/components/core/PeriodToggle.jsx";
 import { useSession } from "@/lib/session.js";
 import { LOSS_REASONS } from "@/lib/prospects.js";
+import { OPPORTUNITY_STAGE_LABELS } from "../../../../shared/crmEnums.js";
 import "./reportes.css";
 
 const PERIOD_LABEL = { semana: "esta semana", mes: "este mes" };
@@ -39,6 +40,19 @@ function exportCsv(data, period) {
     [],
     ["Detalle de pérdidas", "Prospecto", "Motivo", "Fecha"],
     ...data.perdidas.detalle.map((p) => ["", p.name, REASON_LABEL[p.reason] ?? p.reason, new Date(p.at).toLocaleDateString("es-MX")]),
+    [],
+    ["Oportunidades", "Valor de pipeline", "Forecast", "Conversión", "Ticket promedio", "Sin monto"],
+    [
+      "",
+      data.oportunidades.pipelineValue,
+      data.oportunidades.forecast,
+      `${data.oportunidades.conversion.rate}%`,
+      data.oportunidades.avgTicket,
+      data.oportunidades.pendingCount,
+    ],
+    [],
+    ["Embudo", "Etapa", "Cantidad"],
+    ...data.oportunidades.funnel.map((f) => ["", OPPORTUNITY_STAGE_LABELS[f.stage] ?? f.stage, f.count]),
   ];
   const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -119,6 +133,30 @@ export default function Reportes() {
                 ))}
               </div>
             )}
+          </details>
+
+          {/* ICS-105 — bloque de oportunidades. La sección de actividad/
+              cumplimiento de ICS-89 sigue pendiente, sin tocar aquí. */}
+          <details className="report-card">
+            <summary className="report-card__title">Oportunidades — {PERIOD_LABEL[period]}</summary>
+            <div className="report-grid">
+              <div><span className="report-stat__num">{money(data.oportunidades.pipelineValue)}</span><span className="report-stat__label">Valor de pipeline</span></div>
+              <div><span className="report-stat__num">{money(data.oportunidades.forecast)}</span><span className="report-stat__label">Forecast ponderado</span></div>
+              <div><span className="report-stat__num">{data.oportunidades.conversion.rate}%</span><span className="report-stat__label">Conversión de oportunidades</span></div>
+              <div><span className="report-stat__num">{money(data.oportunidades.avgTicket)}</span><span className="report-stat__label">Ticket promedio</span></div>
+            </div>
+            {data.oportunidades.pendingCount > 0 && (
+              <p className="section-label" style={{ marginTop: 2 }}>{data.oportunidades.pendingCount} oportunidad{data.oportunidades.pendingCount === 1 ? "" : "es"} sin monto (excluida{data.oportunidades.pendingCount === 1 ? "" : "s"} de pipeline/forecast)</p>
+            )}
+            <p className="section-label" style={{ marginTop: 2 }}>Embudo</p>
+            <div className="report-detail">
+              {data.oportunidades.funnel.map((f) => (
+                <div className="report-detail__row" key={f.stage}>
+                  <span>{OPPORTUNITY_STAGE_LABELS[f.stage] ?? f.stage}</span>
+                  <span>{f.count}</span>
+                </div>
+              ))}
+            </div>
           </details>
         </>
       )}

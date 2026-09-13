@@ -10,6 +10,10 @@ import { useSession } from "@/lib/session.js";
 
 const PERIOD_LABEL = { semana: "semana pasada", mes: "mes pasado" };
 
+function money(n) {
+  return `$${n.toLocaleString("es-MX")}`;
+}
+
 function delta(current, previous, period, suffix = "") {
   const diff = current - previous;
   if (diff === 0) return { text: `Sin cambio vs. ${PERIOD_LABEL[period]}`, direction: "flat" };
@@ -31,6 +35,8 @@ export default function MiDesempeno() {
   const atendidosDelta = data && delta(data.current.atendidos, data.previous.atendidos, period);
   const ventasDelta = data && delta(data.current.ventas, data.previous.ventas, period);
   const conversionDelta = data && delta(data.current.tasaConversion, data.previous.tasaConversion, period, " pts");
+  const oppConversionDelta =
+    data && delta(data.oportunidades.conversion.current.rate, data.oportunidades.conversion.previous.rate, period, " pts");
 
   return (
     <>
@@ -43,6 +49,15 @@ export default function MiDesempeno() {
           <PerfTile value={data.current.atendidos} label="Prospectos atendidos" delta={atendidosDelta.text} direction={atendidosDelta.direction} />
           <PerfTile value={data.current.ventas} label="Ventas cerradas" delta={ventasDelta.text} direction={ventasDelta.direction} />
           <PerfTile value={`${data.current.tasaConversion}%`} label="Tasa de conversión personal" delta={conversionDelta.text} direction={conversionDelta.direction} />
+
+          {/* ICS-105 — mi pipeline de oportunidades (actividad/cumplimiento de ICS-87 sigue pendiente). */}
+          <PerfTile value={money(data.oportunidades.pipelineValue)} label="Mi pipeline" delta={`Forecast: ${money(data.oportunidades.forecast)}`} direction="flat" />
+          <PerfTile
+            value={`${data.oportunidades.conversion.current.rate}%`}
+            label="Conversión de oportunidades"
+            delta={oppConversionDelta.text}
+            direction={oppConversionDelta.direction}
+          />
         </div>
       ) : (
         <p style={{ fontFamily: "var(--font-ui)", color: "var(--color-mute)", fontSize: 13.5, textAlign: "center", padding: "24px 0" }}>
