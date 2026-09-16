@@ -1,5 +1,9 @@
 // Pantalla 3 — Dashboard ejecutivo (inicio de Marta). Recreación de
 // src/app/(app)/dashboard/page.js.
+function money(n) {
+  return `$${n.toLocaleString('es-MX')}`;
+}
+
 function weekRangeLabel() {
   const now = new Date();
   const day = now.getDay();
@@ -47,6 +51,16 @@ function Dashboard({ onGoToRiesgo }) {
       <div className="rank-row">
         <span className="rank-row__who">{data.carlos.name} — tasa de conversión</span>
         <span className="rank-row__val">{data.carlos.conversionThisWeek}%</span>
+      </div>
+
+      {/* ICS-105 — pipeline/forecast de oportunidades. */}
+      <p className="section-label">Oportunidades</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <KpiTile value={money(window.MOCK_OPORTUNIDADES_METRICS.pipelineValue)} label="Valor de pipeline" />
+        <KpiTile value={money(window.MOCK_OPORTUNIDADES_METRICS.forecast)} label="Forecast ponderado" />
+        <KpiTile value={`${window.MOCK_OPORTUNIDADES_METRICS.conversionThisMonth}%`} label="Conversión de oportunidades" />
+        <KpiTile value={money(window.MOCK_OPORTUNIDADES_METRICS.avgTicketThisMonth)} label="Ticket promedio" />
+        <KpiTile value={window.MOCK_OPORTUNIDADES_METRICS.pendingCount} label="Oportunidades sin monto" warn />
       </div>
     </>
   );

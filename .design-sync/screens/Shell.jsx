@@ -1,12 +1,16 @@
 // Chrome real de la app — recreación de src/nav/AppLayout.js: bottom-nav por
 // rol (src/nav/navConfig.js, literal), FAB de "Nuevo prospecto" (solo
 // vendedor), botón de cerrar sesión fijo arriba a la derecha.
+// ICS-103: "Ventas" nuevo (ambos roles) — pipeline comercial real
+// (opportunities/sales). "Pipeline" renombrado a "Embudo" (ciclo del lead,
+// ICS-98 B2) — la ruta interna sigue llamándose 'pipeline'.
 const NAV_BY_ROLE = {
   vendedor: {
     items: [
       { key: 'tareas', icon: 'check-square', label: 'Tareas' },
       { key: 'prospectos', icon: 'users', label: 'Prospectos' },
-      { key: 'pipeline', icon: 'git-branch', label: 'Pipeline' },
+      { key: 'pipeline', icon: 'git-branch', label: 'Embudo' },
+      { key: 'ventas', icon: 'dollar-sign', label: 'Ventas' },
       { key: 'mi-desempeno', icon: 'bar-chart-2', label: 'Mi progreso' },
     ],
     fab: true,
@@ -14,7 +18,8 @@ const NAV_BY_ROLE = {
   administrador: {
     items: [
       { key: 'dashboard', icon: 'layout-grid', label: 'Dashboard' },
-      { key: 'pipeline', icon: 'git-branch', label: 'Pipeline' },
+      { key: 'pipeline', icon: 'git-branch', label: 'Embudo' },
+      { key: 'ventas', icon: 'dollar-sign', label: 'Ventas' },
       { key: 'reportes', icon: 'file-bar-chart', label: 'Reportes' },
       { key: 'configuracion', icon: 'settings', label: 'Config' },
     ],

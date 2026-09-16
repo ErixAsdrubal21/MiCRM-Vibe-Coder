@@ -354,3 +354,15 @@
 .follow-actions { display: flex; gap: 8px; margin-top: 10px; }
 .follow-actions .mn-button { flex: 1; }
 .reprogram-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-hairline); }
+
+/* ICS-103 — pantalla /ventas (2 vistas) y filas de oportunidad/venta, reusadas también en la Ficha (ICS-104). */
+.opp-row, .sale-row {
+  display: flex; flex-direction: column; gap: 6px; width: 100%;
+  border: none; background: var(--color-surface); border-radius: var(--radius-md);
+  padding: 12px 14px; text-align: left; cursor: pointer; font: inherit; color: inherit;
+}
+.opp-row__head, .sale-row__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.opp-row__amount, .sale-row__amount { font-family: var(--font-ui); font-size: 15px; font-weight: 800; color: var(--color-ink); font-variant-numeric: tabular-nums; }
+.opp-row__meta, .sale-row__meta { display: flex; align-items: center; gap: 8px; font-family: var(--font-ui); font-size: 12px; color: var(--color-mute); }
+.sale-row--voided { opacity: 0.6; }
+.empty-state { font-family: var(--font-ui); color: var(--color-mute); font-size: 13.5px; text-align: center; padding: 32px 12px; }

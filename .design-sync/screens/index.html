@@ -1,4 +1,4 @@
-<!-- @dsCard group="CRM App" viewport="390x780" name="App CRM (click-through) — 11 pantallas" subtitle="Login, Tareas, Dashboard, Prospectos, Ficha, Nuevo prospecto, Registrar interacción, Pipeline, Reportes, Mi desempeño, Configuración" -->
+<!-- @dsCard group="CRM App" viewport="390x780" name="App CRM (click-through) — 15 pantallas" subtitle="Login, Tareas, Dashboard, Prospectos, Ficha, Nuevo prospecto, Registrar interacción, Embudo de prospectos, Reportes, Mi desempeño, Configuración, Ventas, Detalle de venta, Nueva oportunidad, Nueva venta directa" -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -43,6 +43,10 @@
   <script type="text/babel" src="Reportes.jsx"></script>
   <script type="text/babel" src="MiDesempeno.jsx"></script>
   <script type="text/babel" src="Configuracion.jsx"></script>
+  <script type="text/babel" src="Ventas.jsx"></script>
+  <script type="text/babel" src="VentaDetalle.jsx"></script>
+  <script type="text/babel" src="NuevaOportunidad.jsx"></script>
+  <script type="text/babel" src="NuevaVenta.jsx"></script>
   <script type="text/babel">
     // Flujo real de Carlos: Tareas (inicio) -> toca una tarea -> Ficha ->
     // "Registrar interacción". FAB "+" -> Nuevo prospecto.
@@ -52,7 +56,11 @@
       const [role, setRole] = React.useState(null);
       const [screen, setScreen] = React.useState('tareas');
       const [prospectId, setProspectId] = React.useState(null);
+      const [saleId, setSaleId] = React.useState(null);
       const [riskFilter, setRiskFilter] = React.useState(false);
+      // Pantalla a la que "Cerrar"/"Volver" regresa desde las rutas de alta
+      // de /ventas — puede llegar desde el nav (Ventas) o desde la Ficha.
+      const [ventasReturnTo, setVentasReturnTo] = React.useState('ventas');
 
       function enter(r) {
         setRole(r);
@@ -61,6 +69,9 @@
       function logout() { setRole(null); }
       function openProspect(id) { setProspectId(id); setScreen('ficha'); }
       function goToRiesgo() { setRiskFilter(true); setScreen('prospectos'); }
+      function verVenta(id) { setSaleId(id); setScreen('venta-detalle'); }
+      function nuevaOportunidadDesde(returnTo) { setVentasReturnTo(returnTo); setScreen('nueva-oportunidad'); }
+      function nuevaVentaDesde(returnTo) { setVentasReturnTo(returnTo); setScreen('nueva-venta'); }
 
       if (!role) return <Login onEnter={enter} />;
 
@@ -71,7 +82,10 @@
         body = <RegistrarInteraccion prospectId={prospectId} onClose={() => setScreen('ficha')} onSaved={() => setScreen('ficha')} />;
       } else if (screen === 'ficha') {
         body = <Ficha role={role} prospectId={prospectId} onBack={() => setScreen(role === 'vendedor' ? 'tareas' : 'prospectos')}
-          onRegistrarInteraccion={(id) => { setProspectId(id); setScreen('registrar-interaccion'); }} />;
+          onRegistrarInteraccion={(id) => { setProspectId(id); setScreen('registrar-interaccion'); }}
+          onNuevaOportunidad={() => nuevaOportunidadDesde('ficha')}
+          onNuevaVenta={() => nuevaVentaDesde('ficha')}
+          onVerVenta={verVenta} />;
       } else if (screen === 'tareas') {
         body = <Tareas onOpenProspect={openProspect} />;
       } else if (screen === 'dashboard') {
@@ -86,6 +100,15 @@
         body = <Reportes />;
       } else if (screen === 'configuracion') {
         body = <Configuracion role={role} />;
+      } else if (screen === 'ventas') {
+        body = <Ventas role={role} onOpenProspect={openProspect} onVerVenta={verVenta}
+          onNuevaOportunidad={() => nuevaOportunidadDesde('ventas')} onNuevaVenta={() => nuevaVentaDesde('ventas')} />;
+      } else if (screen === 'venta-detalle') {
+        body = <VentaDetalle role={role} saleId={saleId} onBack={() => setScreen('ventas')} />;
+      } else if (screen === 'nueva-oportunidad') {
+        body = <NuevaOportunidad onClose={() => setScreen(ventasReturnTo)} onSaved={() => setScreen(ventasReturnTo)} />;
+      } else if (screen === 'nueva-venta') {
+        body = <NuevaVenta onClose={() => setScreen(ventasReturnTo)} onSaved={() => setScreen(ventasReturnTo)} />;
       }
 
       return (

@@ -93,16 +93,77 @@ function TimelineEvent({ event, onAskDelete, confirmingDelete, onConfirmDelete, 
       </div>
     );
   }
+
+  // ICS-106 — 3 tipos nuevos (ICS-99/101).
+  if (event.type === 'oportunidad-ganada') {
+    return (
+      <div className="tl-item">
+        <div className="tl-item__icon tl-item__icon--accent"><Icon name="trophy" size={16} /></div>
+        <div className="tl-item__body">
+          <div className="tl-item__head">
+            <p className="tl-item__title">Oportunidad ganada: {event.opportunityName}</p>
+            <span className="tl-item__date">{event.at}</span>
+          </div>
+          <div className="tl-item__meta"><span className="tl-item__author">{event.actorName}</span></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (event.type === 'oportunidad-perdida') {
+    return (
+      <div className="tl-item tl-item--muted">
+        <div className="tl-item__icon"><Icon name="x-circle" size={16} /></div>
+        <div className="tl-item__body">
+          <div className="tl-item__head">
+            <p className="tl-item__title">Oportunidad perdida: {event.opportunityName}</p>
+            <span className="tl-item__date">{event.at}</span>
+          </div>
+          <div className="tl-item__meta">
+            <span className="tl-item__author">{event.actorName}</span>
+            {event.lossReason && <Tag variant="neutral">{event.lossReason}</Tag>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (event.type === 'venta-anulada') {
+    return (
+      <div className="tl-item tl-item--muted">
+        <div className="tl-item__icon"><Icon name="ban" size={16} /></div>
+        <div className="tl-item__body">
+          <div className="tl-item__head">
+            <p className="tl-item__title">Venta anulada: ${event.amount.toLocaleString('es-MX')} · {event.product}</p>
+            <span className="tl-item__date">{event.at}</span>
+          </div>
+          {event.voidReason && <p className="tl-item__note">{event.voidReason}</p>}
+          <div className="tl-item__meta"><span className="tl-item__author">{event.actorName}</span></div>
+        </div>
+      </div>
+    );
+  }
   return null;
 }
 const STAGE_LABEL = { nuevo: 'Nuevo', contactado: 'Contactado', cotizacion: 'Cotización enviada', negociacion: 'En negociación', ganado: 'Ganado', perdido: 'Perdido' };
+function money(n) { return `$${n.toLocaleString('es-MX')}`; }
 
-function Ficha({ role, prospectId, onBack, onRegistrarInteraccion }) {
-  const { Icon, IconButton, Badge, Button } = window.MiNegocioCRM;
+function Ficha({ role, prospectId, onBack, onRegistrarInteraccion, onNuevaOportunidad, onNuevaVenta, onVerVenta }) {
+  const { Icon, IconButton, Badge, Tag, Button } = window.MiNegocioCRM;
   const canEdit = role === 'vendedor';
   const prospect = window.MOCK_PROSPECTS.find((p) => p.id === prospectId) || window.MOCK_PROSPECTS[0];
   const timeline = window.MOCK_TIMELINE[prospect.id] || [];
   const [confirmDeleteId, setConfirmDeleteId] = React.useState(null);
+
+  // ICS-104 — oportunidades/ventas de este cliente. Join en lectura para
+  // "venta anulada" (B3: opportunity.saleId -> sale.voidedAt, sin campo nuevo).
+  const opportunities = window.MOCK_OPPORTUNITIES.filter((o) => o.prospectId === prospect.id);
+  const sales = window.MOCK_SALES.filter((s) => s.prospectId === prospect.id);
+  const saleById = Object.fromEntries(sales.map((s) => [s.id, s]));
+  const openOpportunities = opportunities.filter((o) => ['calificacion', 'cotizacion', 'negociacion'].includes(o.stage));
+  const pipelineAmount = openOpportunities.reduce((sum, o) => sum + (o.estimatedAmount || 0), 0);
+  const activeSales = sales.filter((s) => !s.voidedAt);
+  const salesTotal = activeSales.reduce((sum, s) => sum + s.amount, 0);
 
   return (
     <>
@@ -133,12 +194,9 @@ function Ficha({ role, prospectId, onBack, onRegistrarInteraccion }) {
         {canEdit && <button className="mn-button mn-button--ghost" style={{ height: 36, padding: '0 10px', fontSize: 12.5 }}>Cambiar</button>}
       </div>
 
-      {prospect.stage === 'ganado' && prospect.sale ? (
-        <div className="next-follow">
-          <span style={{ color: 'var(--color-accent-pressed)', display: 'inline-flex' }}><Icon name="dollar-sign" size={18} /></span>
-          <span className="next-follow__txt">Vendido: <b>${prospect.sale.amount.toLocaleString('es-MX')} · {prospect.sale.product}</b></span>
-        </div>
-      ) : prospect.nextFollowUpType ? (
+      {/* ICS-104: el bloque "Vendido: $X" atado a stage==="ganado" se quitó —
+          el detalle de venta vive ahora en el bloque "Ventas" de abajo. */}
+      {prospect.nextFollowUpType ? (
         <div className="next-follow" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ color: 'var(--color-accent-pressed)', display: 'inline-flex' }}><Icon name="calendar-clock" size={18} /></span>
@@ -155,6 +213,68 @@ function Ficha({ role, prospectId, onBack, onRegistrarInteraccion }) {
         <div className="next-follow">
           <span style={{ color: 'var(--color-accent-pressed)', display: 'inline-flex' }}><Icon name="calendar-clock" size={18} /></span>
           <span className="next-follow__txt">Sin seguimiento programado</span>
+        </div>
+      )}
+
+      {/* ICS-104 — bloques de oportunidades/ventas del cliente. */}
+      <p className="section-label">Oportunidades{openOpportunities.length > 0 ? ` · ${money(pipelineAmount)} en pipeline` : ''}</p>
+      {canEdit && <Button variant="secondary" onClick={() => onNuevaOportunidad(prospect.id)}>+ Nueva oportunidad</Button>}
+      {opportunities.length === 0 ? (
+        <p style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--color-mute)' }}>Sin oportunidades registradas.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {opportunities.map((o) => {
+            const isOpen = ['calificacion', 'cotizacion', 'negociacion'].includes(o.stage);
+            const voidedSale = o.saleId ? saleById[o.saleId] : null;
+            return (
+              <div className="list-row" key={o.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <p className="list-row__title">{o.name}</p>
+                  <Badge stage={o.stage} />
+                </div>
+                <p className="list-row__meta">{o.product}</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  {o.estimatedAmount != null ? (
+                    <span style={{ fontFamily: 'var(--font-ui)', fontSize: 13.5, fontWeight: 700, color: 'var(--color-ink)' }}>{money(o.estimatedAmount)}</span>
+                  ) : (
+                    <Tag variant="neutral">Monto pendiente</Tag>
+                  )}
+                  {o.stage === 'ganada' && voidedSale?.voidedAt && <Tag variant="risk">Venta anulada</Tag>}
+                  {isOpen && o.expectedCloseDate && <span className="list-row__meta">Esperada: {o.expectedCloseDate}</span>}
+                </div>
+                {canEdit && isOpen && (
+                  <div className="follow-actions">
+                    <Button variant="secondary">Editar</Button>
+                    <Button variant="secondary">Ganar</Button>
+                    <Button variant="secondary">Marcar perdida</Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="section-label">Ventas{activeSales.length > 0 ? ` · ${money(salesTotal)} en ${activeSales.length} venta${activeSales.length === 1 ? '' : 's'}` : ''}</p>
+      {canEdit && <Button variant="secondary" onClick={() => onNuevaVenta(prospect.id)}>+ Registrar venta directa</Button>}
+      {sales.length === 0 ? (
+        <p style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: 'var(--color-mute)' }}>Sin ventas registradas.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {sales.map((s) => (
+            <button
+              key={s.id}
+              className="list-row"
+              style={{ border: 'none', width: '100%', cursor: 'pointer', textAlign: 'left', opacity: s.voidedAt ? 0.6 : 1 }}
+              onClick={() => onVerVenta(s.id)}
+            >
+              <div>
+                <p className="list-row__title">{money(s.amount)} · {s.product}</p>
+                <p className="list-row__meta">{s.closedAt}</p>
+              </div>
+              {s.voidedAt && <Tag variant="risk">Venta anulada</Tag>}
+            </button>
+          ))}
         </div>
       )}
 

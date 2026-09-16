@@ -12,7 +12,8 @@ function Pipeline({ role, onOpenProspect }) {
 
   return (
     <>
-      <div className="top-bar"><p className="top-bar__title">Pipeline de ventas</p></div>
+      {/* ICS-103: renombrado — el pipeline comercial real vive en /ventas. */}
+      <div className="top-bar"><p className="top-bar__title">Embudo de prospectos</p></div>
 
       {groups.map((group) => (
         <div className="stage-block" key={group.stage}>
