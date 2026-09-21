@@ -25,7 +25,13 @@
 
 .top-bar {
   flex: none;
-  padding: 18px 16px 14px;
+  /* padding-right reserva el hueco del botón fijo "Cerrar sesión" de
+     AppLayout.js (position: fixed; top:16; right:16; 40x40) — sin esto, el
+     título largo de una pantalla o el botón de `action` (p. ej. "Nueva
+     tarea" en Tareas) caen debajo de ese botón fijo y le roban los clics
+     (bug real encontrado en producción, 2026-09-21: el "+" de Nueva tarea
+     nunca respondía porque "Cerrar sesión" absorbía el click). */
+  padding: 18px 64px 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -139,7 +145,7 @@
   .nav-item.active { background: var(--color-accent-tint); }
 
   .app-shell__content { padding: 4px 32px 48px; max-width: 720px; }
-  .top-bar { padding: 24px 32px 14px; max-width: 720px; }
+  .top-bar { padding: 24px 72px 14px 32px; max-width: 720px; } /* mismo hueco reservado que en móvil, ver el comentario de arriba */
 
   .fab { right: 40px; bottom: 40px; }
 }
