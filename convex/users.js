@@ -47,6 +47,36 @@ export const provisionPassword = internalAction({
   },
 });
 
+/**
+ * "Break glass" — restablece la contraseña de una cuenta existente por
+ * correo, SIN exigir una sesión de administrador ya activa (a diferencia de
+ * `resetUserPassword`, que sí la exige). Existe para el caso en que el
+ * ÚNICO administrador pierde su propia contraseña: nadie más puede usar el
+ * flujo normal (Configuración → Equipo → restablecer) para desbloquearlo.
+ *
+ * Como `provisionPassword`: `internalAction`, nunca expuesta a la UI ni al
+ * cliente — solo se llama con el deploy key, corriendo localmente
+ * `scripts/reset-user-password.mjs` (prompt oculto, la contraseña nunca
+ * pasa por un argumento de shell ni por un chat/IA). Invalida las sesiones
+ * activas del usuario, igual que `resetUserPassword`.
+ */
+export const resetPasswordByEmail = internalAction({
+  args: { email: v.string(), newPassword: v.string() },
+  handler: async (ctx, { email, newPassword }) => {
+    const user = await ctx.runQuery(internal.users.getUserByEmail, { email });
+    if (!user) throw new Error(`No existe ninguna cuenta con el correo ${email}.`);
+    await modifyAccountCredentials(ctx, { provider: "password", account: { id: email, secret: newPassword } });
+    await invalidateSessions(ctx, { userId: user._id });
+    return "ok";
+  },
+});
+
+/** Fila `users` por correo — solo para `resetPasswordByEmail`, que corre en una action sin `ctx.db`. */
+export const getUserByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).unique(),
+});
+
 /** ICS-29: lista del equipo para la sección de Configuración de un administrador. */
 export const listTeam = query({
   args: {},
