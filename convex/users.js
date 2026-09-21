@@ -77,6 +77,19 @@ export const getUserByEmail = internalQuery({
   handler: async (ctx, { email }) => ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).unique(),
 });
 
+/**
+ * El primer usuario de un rol — solo para el provider "open-access" de
+ * convex/auth.js (ver ahí el porqué). MVP de un único vendedor/administrador,
+ * mismo supuesto que ya usa `computeCarlosBlock` en metrics.js.
+ */
+export const getFirstUserByRole = internalQuery({
+  args: { role },
+  handler: async (ctx, { role: targetRole }) => {
+    const users = await ctx.db.query("users").collect();
+    return users.find((u) => u.role === targetRole) ?? null;
+  },
+});
+
 /** ICS-29: lista del equipo para la sección de Configuración de un administrador. */
 export const listTeam = query({
   args: {},

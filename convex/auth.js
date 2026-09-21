@@ -1,6 +1,39 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import { Password } from "@convex-dev/auth/providers/Password";
+import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
 import Google from "@auth/core/providers/google";
+import { internal } from "./_generated/api";
+
+/**
+ * "Open access" — entrar con un clic, sin contraseña, elegido por rol.
+ * Decisión del usuario (2026-09-21): mientras el equipo sigue desarrollando,
+ * prefieren no tener que recordar contraseñas. Es un interruptor real de
+ * seguridad — con `OPEN_ACCESS=true` cualquiera con la URL pública entra
+ * como Carlos o Marta sin credencial alguna. Para revertir: `npx convex env
+ * remove OPEN_ACCESS` (o ponerlo en cualquier valor que no sea "true") — no
+ * hace falta tocar código ni volver a desplegar.
+ *
+ * Implementado como su propio provider (`ConvexCredentials`, la misma base
+ * que usa `Password` por debajo) en vez de tocar `Password`/Google: ninguna
+ * cuenta ni flujo existente cambia, y quitar esto es borrar un bloque
+ * autocontenido. `authorize` mismo revisa la bandera — no depender de que
+ * el cliente decida no ofrecer el botón, que solo oculta la opción, no la
+ * cierra del lado del servidor.
+ */
+const OpenAccess = ConvexCredentials({
+  id: "open-access",
+  authorize: async ({ role }, ctx) => {
+    if (process.env.OPEN_ACCESS !== "true") {
+      throw new Error("Acceso abierto deshabilitado.");
+    }
+    if (role !== "vendedor" && role !== "administrador") {
+      throw new Error("Rol inválido.");
+    }
+    const user = await ctx.runQuery(internal.users.getFirstUserByRole, { role });
+    if (!user) throw new Error(`No hay ningún usuario con rol ${role}.`);
+    return { userId: user._id };
+  },
+});
 
 /**
  * Seguridad real (ICS-6/7/8, reemplaza el login mock): sin registro público.
@@ -42,6 +75,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       },
     }),
     Google,
+    OpenAccess,
   ],
   callbacks: {
     async createOrUpdateUser(ctx, { existingUserId, type, profile }) {

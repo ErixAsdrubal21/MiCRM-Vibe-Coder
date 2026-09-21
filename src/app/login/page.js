@@ -47,10 +47,43 @@ export default function Login() {
     }
   }
 
+  async function handleOpenAccess(role) {
+    setError("");
+    setSubmitting(true);
+    try {
+      await signIn("open-access", { role });
+      router.replace("/");
+    } catch (err) {
+      setError("No se pudo entrar sin contraseña.");
+      setSubmitting(false);
+    }
+  }
+
+  const openAccess = process.env.NEXT_PUBLIC_OPEN_ACCESS === "1";
+
   return (
     <div className="login-screen">
       <p className="wordmark">Mi Negocio<span>CRM</span></p>
       <p className="login-tag">Organiza a tus clientes sin complicarte</p>
+
+      {openAccess && (
+        <div className="field-group" style={{ gap: 8 }}>
+          <p className="field-label" style={{ color: "var(--color-critical)" }}>
+            Modo de desarrollo — entrar sin contraseña
+          </p>
+          <Button type="button" variant="secondary" full disabled={submitting || googleSubmitting} onClick={() => handleOpenAccess("vendedor")}>
+            Entrar como Carlos (vendedor)
+          </Button>
+          <Button type="button" variant="secondary" full disabled={submitting || googleSubmitting} onClick={() => handleOpenAccess("administrador")}>
+            Entrar como Marta (administradora)
+          </Button>
+          <div className="or-divider">
+            <hr className="divider" />
+            <span>o con tu cuenta</span>
+            <hr className="divider" />
+          </div>
+        </div>
+      )}
 
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="field-group">
