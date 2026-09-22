@@ -202,3 +202,29 @@ export const reassignProspectForSmoke = internalMutation({
     };
   },
 });
+
+/**
+ * Solo para QA manual en un deployment de DESARROLLO sin ningún
+ * administrador todavía (p. ej. el `dev` de este proyecto, que solo tenía
+ * vendedores de prueba). Idempotente: si ya existe alguna fila `role:
+ * "administrador"`, no hace nada. Nunca se llama contra producción — ahí
+ * Marta ya está aprovisionada con contraseña real
+ * (`scripts/provision-user.mjs`); este helper solo destraba QA local del
+ * modo "open access" para el rol de administrador.
+ *   npx convex run testHelpers:provisionDemoAdmin
+ */
+export const provisionDemoAdmin = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const existing = await ctx.db.query("users").collect();
+    if (existing.some((u) => u.role === "administrador")) {
+      return { created: false };
+    }
+    const id = await ctx.db.insert("users", {
+      name: "Marta (demo)",
+      email: "marta-demo@minegocio.com",
+      role: "administrador",
+    });
+    return { created: true, id };
+  },
+});

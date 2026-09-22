@@ -1,8 +1,8 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { requireVendedor, requireProspect, requireAuthenticatedUser } from "./permissions";
-import { isActiveStage, pendingFollowUp, recordTimelineEvent } from "./lib";
+import { requireVendedor, requireOwnedProspect, requireAuthenticatedUser } from "./permissions";
+import { isActiveStage, pendingFollowUp, recordTimelineEvent, businessToday, calendarDateToMs, isValidCalendarDate } from "./lib";
 import { collectFilteredPage, hydrateByIds } from "./pagination";
 import { contactType, followUpType, outcome } from "./validators.js";
 
@@ -56,17 +56,31 @@ export const add = mutation({
     note: v.string(),
     at: v.optional(v.number()),
     outcome: v.optional(outcome),
-    nextFollowUp: v.optional(v.object({ at: v.number(), type: followUpType })),
+    // ICS-93: día calendario, no timestamp — mismo contrato que dejó ICS-92
+    // en `followUps.create` (el servidor, no el navegador, es dueño de qué
+    // día es "hoy" en la zona del negocio). Ver businessToday/calendarDateToMs
+    // en convex/lib.js.
+    nextFollowUp: v.optional(v.object({ date: v.string(), type: followUpType })),
   },
   handler: async (ctx, { prospectId, type, note, at, outcome: outcomeArg, nextFollowUp }) => {
-    const user = await requireVendedor(ctx);
-    const prospect = await requireProspect(ctx, prospectId);
+    // ICS-94: aislamiento de cartera — un vendedor solo registra interacciones
+    // sobre prospectos que le pertenecen. `requireOwnedProspect` ya existía
+    // (construida para ICS-99/100, previendo este caso).
+    const { user, prospect } = await requireOwnedProspect(ctx, prospectId);
 
     requireNote(note);
     const interactionAt = resolveAt(at);
 
     if (isActiveStage(prospect.stage) && !nextFollowUp) {
       throw new Error("Todo prospecto activo necesita una fecha de próximo seguimiento (ICS-16).");
+    }
+    if (nextFollowUp) {
+      if (!isValidCalendarDate(nextFollowUp.date)) {
+        throw new Error("Fecha de próximo seguimiento inválida.");
+      }
+      if (nextFollowUp.date < businessToday()) {
+        throw new Error("La fecha de próximo seguimiento no puede ser en el pasado.");
+      }
     }
 
     const interactionId = await ctx.db.insert("interactions", {
@@ -104,7 +118,7 @@ export const add = mutation({
     if (nextFollowUp) {
       const followUpId = await ctx.db.insert("followUps", {
         prospectId,
-        at: nextFollowUp.at,
+        at: calendarDateToMs(nextFollowUp.date),
         type: nextFollowUp.type,
         status: "pendiente",
         ownerId: prospect.ownerId,

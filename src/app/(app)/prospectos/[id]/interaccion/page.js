@@ -8,7 +8,7 @@ import { Icon } from "@/design/components/core/Icon.jsx";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { isActiveStage, CONTACT_TYPES, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
-import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
+import { todayISO, plusDaysISO } from "@/lib/dates.js";
 
 function defaultFollowUpDate(prospect) {
   return plusDaysISO(prospect.stage === "cotizacion" ? 2 : 1);
@@ -59,7 +59,7 @@ export default function RegistrarInteraccion() {
         prospectId: prospect._id,
         type,
         note,
-        nextFollowUp: followUpDateValue ? { at: isoToLocalMs(followUpDateValue), type: followUpType } : undefined,
+        nextFollowUp: followUpDateValue ? { date: followUpDateValue, type: followUpType } : undefined,
       });
       router.replace(`/prospectos/${prospect._id}`);
     } catch (err) {

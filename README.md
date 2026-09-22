@@ -71,3 +71,9 @@ Cada componente en `src/design/components/core/` lleva `"use client"` porque tod
 - **GitHub**: este repo vive en `github.com/ErixAsdrubal21/MiCRM-Vibe-Coder`, rama `main`.
 - **Railway**: detecta Next.js automáticamente (Nixpacks) — solo necesita las variables de entorno de `.env.example` configuradas en el proyecto de Railway (`NEXT_PUBLIC_CONVEX_URL`, `CONVEX_DEPLOYMENT`, apuntando al deployment de producción de Convex, no al de `convex dev`), conectado vía integración Git a este repo.
 - **Convex**: hoy corre en modo anónimo/local (`npx convex dev`, sin cuenta). Antes de desplegar hace falta `npx convex login` (login real por navegador, requiere intervención manual del usuario) + `npx convex deploy`, que genera el `NEXT_PUBLIC_CONVEX_URL` de producción — ese es el que va en Railway, no el de `convex dev`.
+
+## Tests automatizados — decisión (ICS-90)
+
+El repo no tiene ningún framework de test instalado. La verificación en cada milestone ha sido: `npx eslint .` + `npm run build` + `npx convex dev` (typecheck de funciones/esquema) limpios, más smoke tests standalone contra un deployment real (`scripts/smoke-*.mjs`, autenticados con Convex Auth) y click-through manual/Playwright contra `dev` o producción para cada feature nueva.
+
+**Decisión (2026-09-22):** mantener ese enfoque — sin `vitest`/`convex-test` por ahora — en vez de introducir un framework nuevo dentro de este mismo pase. Justificación: el patrón actual ya cubre lo que estos issues necesitaban verificar (reglas de negocio + permisos + UI real), y cambiar de herramienta es una decisión de alcance aparte que vale la pena tomar con calma, no colada dentro de una feature. Queda como deuda técnica explícita, no como olvido: si el equipo crece o la lógica de negocio se vuelve más difícil de cubrir con smoke scripts manuales, `vitest` + `convex-test` (soporte oficial de Convex para tests unitarios de funciones, sin desplegar) es la opción recomendada para retomar.

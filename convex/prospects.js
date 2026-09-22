@@ -1,16 +1,28 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./permissions";
+import { requireAuthenticatedUser, requireVendedor, requireOwnedProspect } from "./permissions";
 import { lastContactAt, pendingFollowUp, recordTimelineEvent } from "./lib";
 import { channel, stage, lossReason } from "./validators.js";
 import { OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
 
-/** ICS-13 Lista: todos los prospectos + lastContactAt. Sin interactions/nextFollowUp, la Lista no los usa. */
+/**
+ * ICS-13 Lista: prospectos + lastContactAt. Sin interactions/nextFollowUp, la
+ * Lista no los usa.
+ *
+ * ICS-94: aislamiento de cartera — un vendedor solo ve su propia cartera
+ * (mismo índice `by_owner` que ya usa `listMine`, que sigue existiendo aparte
+ * para el selector de "Nueva tarea" — no vale la pena fusionarlas, tienen
+ * consumidores distintos). Marta (administrador) sigue viendo todo: es
+ * lectura de supervisión, no una acción sobre la cartera de nadie.
+ */
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireAuthenticatedUser(ctx);
-    const prospects = await ctx.db.query("prospects").order("desc").collect();
+    const user = await requireAuthenticatedUser(ctx);
+    const prospects =
+      user.role === "vendedor"
+        ? await ctx.db.query("prospects").withIndex("by_owner", (q) => q.eq("ownerId", user._id)).order("desc").collect()
+        : await ctx.db.query("prospects").order("desc").collect();
     return Promise.all(
       prospects.map(async (p) => ({
         ...p,
@@ -87,6 +99,12 @@ export const pipeline = query({
  * `opportunities.listByProspect` + `sales.listByProspect` (paginadas,
  * ICS-104) para el detalle. Todo acotado a ESTA relación, nunca a la tabla
  * completa — mismo principio que evitó el array ilimitado de interacciones.
+ *
+ * ICS-94: a propósito NO usa `requireOwnedProspect` — la lectura de la ficha
+ * sigue abierta a ambos roles (el PRD es explícito: "Marta puede verla pero
+ * no registrar interacciones"). El aislamiento de cartera de ICS-94 es sobre
+ * ESCRITURA (`update`/`changeStage`/interacciones/seguimientos) y sobre la
+ * pantalla `/prospectos` (lista), no sobre poder abrir una ficha por id.
  */
 export const get = query({
   args: { id: v.id("prospects") },
@@ -158,8 +176,8 @@ export const update = mutation({
     note: v.string(),
   },
   handler: async (ctx, { id, ...patch }) => {
-    await requireVendedor(ctx);
-    await requireProspect(ctx, id);
+    // ICS-94: aislamiento de cartera — un vendedor solo edita sus propios prospectos.
+    await requireOwnedProspect(ctx, id);
     await ctx.db.patch(id, patch);
     return ctx.db.get(id);
   },
@@ -189,8 +207,8 @@ export const changeStage = mutation({
     lossReason: v.optional(lossReason),
   },
   handler: async (ctx, { id, stage: newStage, lossReason: reason }) => {
-    const user = await requireVendedor(ctx);
-    const prospect = await requireProspect(ctx, id);
+    // ICS-94: aislamiento de cartera — un vendedor solo cambia la etapa de sus propios prospectos.
+    const { user, prospect } = await requireOwnedProspect(ctx, id);
     const fromStage = prospect.stage;
     if (newStage === "perdido" && !reason) {
       throw new Error("Selecciona un motivo antes de marcar como perdido (ICS-17).");

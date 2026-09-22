@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { requireAuthenticatedUser, requireVendedor, requireProspect } from "./permissions";
+import { requireAuthenticatedUser, requireVendedor, requireProspect, requireOwnedProspect } from "./permissions";
 import {
   isActiveStage,
   lastContactAt,
@@ -171,10 +171,10 @@ export const complete = mutation({
     nextFollowUp: v.optional(v.object({ at: v.number(), type: followUpType })),
   },
   handler: async (ctx, { id, resolution: res, note, type, nextFollowUp }) => {
-    const user = await requireVendedor(ctx);
     const followUp = await ctx.db.get(id);
     if (!followUp) throw new Error("Seguimiento no encontrado.");
-    const prospect = await requireProspect(ctx, followUp.prospectId);
+    // ICS-94: aislamiento de cartera — solo el dueño del prospecto cierra su seguimiento.
+    const { user, prospect } = await requireOwnedProspect(ctx, followUp.prospectId);
     if (followUp.status !== "pendiente") throw new Error("El seguimiento ya fue cerrado.");
     if (res === "reprogramado" && !nextFollowUp) {
       throw new Error("Para reprogramar el seguimiento necesitas indicar la nueva fecha.");
