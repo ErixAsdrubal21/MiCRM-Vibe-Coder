@@ -1,7 +1,7 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireVendedor, requireAdministrador } from "./permissions";
-import { isActiveStage, daysSince, lastContactAt } from "./lib";
+import { isActiveStage, daysSince, lastContactAt, startOfBusinessTodayMs } from "./lib";
 import { LOSS_REASON_VALUES, OPPORTUNITY_OPEN_STAGES, OPPORTUNITY_STAGE_VALUES, STAGE_PROBABILITY } from "../shared/crmEnums.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -76,6 +76,42 @@ function opportunityFunnel(opportunities) {
 }
 
 /**
+ * ICS-87/89 — "≥80% de interacciones con nota + próximo seguimiento" (meta
+ * de éxito explícita del PRD). Denominador: interacciones NO borradas de
+ * origen `manual` (o `source` ausente — datos anteriores a ICS-78) con `at`
+ * en la ventana — NUNCA `source: "follow-up"`/`"sistema"` (esas no las
+ * escribió una persona desde cero). Numerador: de ese conjunto, las que
+ * tienen `note` no vacía Y `nextFollowUpId`. Caso de referencia del propio
+ * issue: 4 manuales (2 con nota+seguimiento) + 3 automáticas → denominador 4,
+ * numerador 2, 50%.
+ */
+function cumplimientoNota(interactions, start, end) {
+  const manual = interactions.filter(
+    (i) => !i.deletedAt && (i.source === "manual" || i.source === undefined) && i.at >= start && i.at < end,
+  );
+  const numerador = manual.filter((i) => i.note && i.note.trim() !== "" && i.nextFollowUpId).length;
+  return { pct: conversionRate(numerador, manual.length), numerador, denominador: manual.length };
+}
+
+/** Seguimientos `pendiente` con `at` antes de hoy (zona del negocio) — mismo corte que `followUps.list` usa para "vencido". */
+function countOverdueFollowUps(followUps) {
+  const cutoff = startOfBusinessTodayMs();
+  return followUps.filter((f) => f.status === "pendiente" && f.at < cutoff).length;
+}
+
+/** `[{userId, name, count}]` de interacciones no borradas en la ventana, por vendedor — para el mini-ranking del dashboard y el detalle expandible de Reportes. */
+function interaccionesPorVendedor(interactions, vendedores, start, end) {
+  const counts = new Map();
+  for (const i of interactions) {
+    if (i.deletedAt || i.at < start || i.at >= end) continue;
+    counts.set(i.registeredBy, (counts.get(i.registeredBy) ?? 0) + 1);
+  }
+  return vendedores
+    .map((u) => ({ userId: u._id, name: u.name, count: counts.get(u._id) ?? 0 }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
  * ICS-22 "Mi desempeño": prospectos atendidos = prospectos propios del
  * vendedor con al menos una interacción registrada por él en el período.
  * Ventas cerradas = filas de `sales` de prospectos propios que él cerró en
@@ -98,7 +134,7 @@ export const myPerformance = query({
     const now = Date.now();
     const { currentStart, previousStart, previousEnd } = windowBounds(period, now);
 
-    const [prospects, interactions, sales, opportunities] = await Promise.all([
+    const [prospects, interactions, sales, opportunities, pendingFollowUps] = await Promise.all([
       ctx.db.query("prospects").withIndex("by_owner", (q) => q.eq("ownerId", user._id)).collect(),
       ctx.db
         .query("interactions")
@@ -111,8 +147,14 @@ export const myPerformance = query({
       // ICS-105 — pipeline propio: todas las oportunidades de este vendedor
       // (abiertas para pipeline/forecast, cerradas para la conversión).
       ctx.db.query("opportunities").withIndex("by_owner_and_stage", (q) => q.eq("ownerId", user._id)).collect(),
+      // ICS-87 — sus propios seguimientos pendientes (para contar los vencidos).
+      ctx.db
+        .query("followUps")
+        .withIndex("by_owner_status_and_date", (q) => q.eq("ownerId", user._id).eq("status", "pendiente"))
+        .collect(),
     ]);
     const ownedProspectIds = new Set(prospects.map((p) => p._id));
+    const { start: todayStart, end: todayEnd } = todayBounds(now);
 
     return {
       current: statsFor(ownedProspectIds, interactions, sales, currentStart, now + 1),
@@ -124,6 +166,10 @@ export const myPerformance = query({
           previous: opportunityConversion(opportunities, previousStart, previousEnd),
         },
       },
+      // ICS-87 — actividad/cumplimiento propios, para "Mi desempeño".
+      interaccionesHoy: interactions.filter((i) => !i.deletedAt && i.at >= todayStart && i.at < todayEnd).length,
+      seguimientosVencidos: countOverdueFollowUps(pendingFollowUps),
+      cumplimientoNota: cumplimientoNota(interactions, currentStart, now + 1),
     };
   },
 });
@@ -196,6 +242,39 @@ function groupByLossReason(lostProspects) {
 }
 
 /**
+ * ICS-89 — seguimientos "programados para el período" (su `at` cae en la
+ * ventana), desglosados por desenlace. "A tiempo" = completado con
+ * `completedAt <= at` (se cerró en la fecha programada o antes). "Vencido" =
+ * sigue `pendiente` y su fecha ya pasó (mismo corte que `followUps.list`
+ * usa para "vencido") — un completado tarde no cuenta aquí como vencido, ya
+ * se cerró; cuenta simplemente como completado pero no "a tiempo".
+ */
+function seguimientoStats(followUps, start, end) {
+  const inPeriod = followUps.filter((f) => f.at >= start && f.at < end);
+  const cutoff = startOfBusinessTodayMs();
+  return {
+    programados: inPeriod.length,
+    completadosATiempo: inPeriod.filter((f) => f.status === "completado" && f.completedAt != null && f.completedAt <= f.at).length,
+    vencidos: inPeriod.filter((f) => f.status === "pendiente" && f.at < cutoff).length,
+  };
+}
+
+/** `[{type, count}]` de interacciones no borradas en la ventana, por tipo de contacto. */
+function interaccionesPorTipo(interactions, start, end) {
+  const inRange = interactions.filter((i) => !i.deletedAt && i.at >= start && i.at < end);
+  const types = [...new Set(inRange.map((i) => i.type))];
+  return types.map((type) => ({ type, count: inRange.filter((i) => i.type === type).length })).sort((a, b) => b.count - a.count);
+}
+
+/** Media de `daysSince(lastContactAt)` sobre prospectos activos — mismo patrón (`Promise.all`) que `countAtRisk`. 0 si no hay ninguno activo. */
+async function avgDaysSinceContact(ctx, activeProspects) {
+  if (activeProspects.length === 0) return 0;
+  const lastContacts = await Promise.all(activeProspects.map((p) => lastContactAt(ctx, p._id, p._creationTime)));
+  const total = lastContacts.reduce((sum, lastAt) => sum + daysSince(lastAt), 0);
+  return Math.round((total / activeProspects.length) * 10) / 10;
+}
+
+/**
  * ICS-23/24 Dashboard ejecutivo de Marta: los 6 bloques del PRD + la alerta
  * de riesgo (comparten el mismo dato `atRiskCount`, sin pantalla/query
  * propia para la alerta). El bloque `carlos` asume el MVP de un solo
@@ -215,7 +294,7 @@ export const dashboard = query({
     const week = windowBounds("semana", now);
     const month = windowBounds("mes", now);
 
-    const [prospects, sales, followUps, users, opportunities] = await Promise.all([
+    const [prospects, sales, followUps, users, opportunities, interactions] = await Promise.all([
       ctx.db.query("prospects").collect(),
       ctx.db.query("sales").collect(),
       ctx.db.query("followUps").collect(),
@@ -224,6 +303,8 @@ export const dashboard = query({
       // que `prospects`/`sales` arriba: es un agregado ejecutivo de admin, no
       // un feed paginado (el CRM es de escala de un negocio pequeño).
       ctx.db.query("opportunities").collect(),
+      // ICS-87 — mismo criterio: agregado ejecutivo, no paginado.
+      ctx.db.query("interactions").collect(),
     ]);
 
     // ICS-105: una venta anulada no cuenta como ingreso — se excluye aquí,
@@ -241,6 +322,11 @@ export const dashboard = query({
       computeCarlosBlock(ctx, vendedores, prospects, followUps, week, now),
     ]);
 
+    // ICS-87 — actividad y cumplimiento de seguimiento (equipo completo).
+    const interaccionesEstaSemana = interactions.filter((i) => !i.deletedAt && inWindow(i.at, week.currentStart, now)).length;
+    const prospectosConInteraccion = new Set(interactions.filter((i) => !i.deletedAt).map((i) => i.prospectId));
+    const prospectosActivosSinInteraccion = active.filter((p) => !prospectosConInteraccion.has(p._id)).length;
+
     return {
       activeCount: active.length,
       salesThisWeek,
@@ -253,6 +339,13 @@ export const dashboard = query({
         ...pipelineStats(opportunities),
         conversionThisMonth: opportunityConversion(opportunities, month.currentStart, now + 1).rate,
         avgTicketThisMonth: avgTicket(activeSales, month.currentStart, now + 1),
+      },
+      actividad: {
+        interaccionesEstaSemana,
+        seguimientosVencidos: countOverdueFollowUps(followUps),
+        prospectosActivosSinInteraccion,
+        cumplimientoNota: cumplimientoNota(interactions, week.currentStart, now + 1),
+        interaccionesPorVendedor: interaccionesPorVendedor(interactions, vendedores, week.currentStart, now + 1),
       },
     };
   },
@@ -272,12 +365,18 @@ export const reportes = query({
     const now = Date.now();
     const { currentStart } = windowBounds(period, now);
 
-    const [prospects, sales, opportunities] = await Promise.all([
+    const [prospects, sales, opportunities, interactions, followUps, users] = await Promise.all([
       ctx.db.query("prospects").collect(),
       ctx.db.query("sales").collect(),
       ctx.db.query("opportunities").collect(),
+      // ICS-89 — bloque "Seguimiento y actividad".
+      ctx.db.query("interactions").collect(),
+      ctx.db.query("followUps").collect(),
+      ctx.db.query("users").collect(),
     ]);
     const nameById = new Map(prospects.map((p) => [p._id, p.name]));
+    const vendedores = users.filter((u) => u.role === "vendedor");
+    const activeProspects = prospects.filter((p) => isActiveStage(p.stage));
 
     // ICS-105: una venta anulada no es ingreso — se excluye de "Ventas" antes
     // de cualquier suma/conteo (el detalle expandible tampoco la muestra).
@@ -311,6 +410,16 @@ export const reportes = query({
         funnel: opportunityFunnel(opportunities),
         conversion: opportunityConversion(opportunities, currentStart, now + 1),
         avgTicket: avgTicket(activeSales, currentStart, now + 1),
+      },
+      // ICS-89 — bloque "Seguimiento y actividad": ¿el equipo está dando
+      // seguimiento con la calidad que el PRD define como éxito?
+      seguimiento: {
+        interaccionesTotales: interactions.filter((i) => !i.deletedAt && i.at >= currentStart && i.at < now + 1).length,
+        porTipo: interaccionesPorTipo(interactions, currentStart, now + 1),
+        porVendedor: interaccionesPorVendedor(interactions, vendedores, currentStart, now + 1),
+        seguimientos: seguimientoStats(followUps, currentStart, now + 1),
+        cumplimientoNota: cumplimientoNota(interactions, currentStart, now + 1),
+        diasPromedioSinContacto: await avgDaysSinceContact(ctx, activeProspects),
       },
     };
   },

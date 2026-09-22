@@ -57,8 +57,39 @@ export default function Dashboard() {
             <KpiTile value={`${data.tasksToday.completadas}/${data.tasksToday.total}`} label={`Tareas de ${data.carlos?.name ?? "el vendedor"} hoy`} />
           </div>
 
-          {/* ICS-105 — pipeline/forecast de oportunidades (bloque de actividad/
-              cumplimiento de ICS-87 sigue pendiente, sin tocar aquí). */}
+          {/* ICS-87 — actividad y cumplimiento de seguimiento del equipo. */}
+          <p className="section-label">Actividad</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <KpiTile value={data.actividad.interaccionesEstaSemana} label="Interacciones esta semana" />
+            <Link href="/actividad?vista=seguimientos&estado=vencidos" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+              <KpiTile value={data.actividad.seguimientosVencidos} label="Seguimientos vencidos" warn={data.actividad.seguimientosVencidos > 0} />
+            </Link>
+            <KpiTile
+              value={data.actividad.prospectosActivosSinInteraccion}
+              label="Prospectos sin interacción"
+              warn={data.actividad.prospectosActivosSinInteraccion > 0}
+            />
+            <KpiTile
+              value={`${data.actividad.cumplimientoNota.pct}%`}
+              label="Cumplimiento de seguimiento"
+              warn={data.actividad.cumplimientoNota.pct < 80}
+            />
+          </div>
+
+          {data.actividad.interaccionesPorVendedor.length > 0 && (
+            <>
+              <p className="section-label" style={{ marginTop: 2 }}>Interacciones por vendedor</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {data.actividad.interaccionesPorVendedor.map((v) => (
+                  <div className="rank-row" key={v.userId}>
+                    <span className="rank-row__who">{v.name}</span>
+                    <span className="rank-row__val">{v.count}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           <p className="section-label">Oportunidades</p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <Link href="/ventas" style={{ textDecoration: "none", color: "inherit", display: "block" }}>

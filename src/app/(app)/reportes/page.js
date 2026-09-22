@@ -7,7 +7,7 @@ import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { PeriodToggle } from "@/design/components/core/PeriodToggle.jsx";
 import { useSession } from "@/lib/session.js";
 import { LOSS_REASONS } from "@/lib/prospects.js";
-import { OPPORTUNITY_STAGE_LABELS } from "../../../../shared/crmEnums.js";
+import { OPPORTUNITY_STAGE_LABELS, CONTACT_TYPE_LABELS } from "../../../../shared/crmEnums.js";
 import "./reportes.css";
 
 const PERIOD_LABEL = { semana: "esta semana", mes: "este mes" };
@@ -53,6 +53,18 @@ function exportCsv(data, period) {
     [],
     ["Embudo", "Etapa", "Cantidad"],
     ...data.oportunidades.funnel.map((f) => ["", OPPORTUNITY_STAGE_LABELS[f.stage] ?? f.stage, f.count]),
+    [],
+    ["Seguimiento y actividad", "Interacciones totales", "Cumplimiento de seguimiento", "Días promedio sin contacto"],
+    ["", data.seguimiento.interaccionesTotales, `${data.seguimiento.cumplimientoNota.pct}%`, data.seguimiento.diasPromedioSinContacto],
+    [],
+    ["Seguimientos", "Programados", "Completados a tiempo", "Vencidos"],
+    ["", data.seguimiento.seguimientos.programados, data.seguimiento.seguimientos.completadosATiempo, data.seguimiento.seguimientos.vencidos],
+    [],
+    ["Interacciones por tipo", "Cantidad"],
+    ...data.seguimiento.porTipo.map((t) => [CONTACT_TYPE_LABELS[t.type] ?? t.type, t.count]),
+    [],
+    ["Interacciones por vendedor", "Cantidad"],
+    ...data.seguimiento.porVendedor.map((v) => [v.name, v.count]),
   ];
   const csv = rows.map((row) => row.map(csvEscape).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -154,6 +166,37 @@ export default function Reportes() {
                 <div className="report-detail__row" key={f.stage}>
                   <span>{OPPORTUNITY_STAGE_LABELS[f.stage] ?? f.stage}</span>
                   <span>{f.count}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          {/* ICS-89 — tercera tarjeta: ¿el equipo está dando seguimiento con
+              la calidad que el PRD define como éxito? */}
+          <details className="report-card">
+            <summary className="report-card__title">Seguimiento y actividad — {PERIOD_LABEL[period]}</summary>
+            <div className="report-grid">
+              <div><span className="report-stat__num">{data.seguimiento.interaccionesTotales}</span><span className="report-stat__label">Interacciones totales</span></div>
+              <div><span className="report-stat__num">{data.seguimiento.seguimientos.completadosATiempo}</span><span className="report-stat__label">Seguimientos a tiempo</span></div>
+              <div><span className="report-stat__num">{data.seguimiento.seguimientos.vencidos}</span><span className="report-stat__label">Seguimientos vencidos</span></div>
+              <div><span className="report-stat__num">{data.seguimiento.cumplimientoNota.pct}%</span><span className="report-stat__label">Cumplimiento de seguimiento</span></div>
+              <div><span className="report-stat__num">{data.seguimiento.diasPromedioSinContacto}</span><span className="report-stat__label">Días promedio sin contacto</span></div>
+            </div>
+            <p className="section-label" style={{ marginTop: 2 }}>Interacciones por vendedor</p>
+            <div className="report-detail">
+              {data.seguimiento.porVendedor.map((v) => (
+                <div className="report-detail__row" key={v.userId}>
+                  <span>{v.name}</span>
+                  <span>{v.count}</span>
+                </div>
+              ))}
+            </div>
+            <p className="section-label" style={{ marginTop: 2 }}>Por tipo de contacto</p>
+            <div className="report-detail">
+              {data.seguimiento.porTipo.map((t) => (
+                <div className="report-detail__row" key={t.type}>
+                  <span>{CONTACT_TYPE_LABELS[t.type] ?? t.type}</span>
+                  <span>{t.count}</span>
                 </div>
               ))}
             </div>

@@ -50,13 +50,23 @@ export default function MiDesempeno() {
           <PerfTile value={data.current.ventas} label="Ventas cerradas" delta={ventasDelta.text} direction={ventasDelta.direction} />
           <PerfTile value={`${data.current.tasaConversion}%`} label="Tasa de conversión personal" delta={conversionDelta.text} direction={conversionDelta.direction} />
 
-          {/* ICS-105 — mi pipeline de oportunidades (actividad/cumplimiento de ICS-87 sigue pendiente). */}
+          {/* ICS-105 — mi pipeline de oportunidades. */}
           <PerfTile value={money(data.oportunidades.pipelineValue)} label="Mi pipeline" delta={`Forecast: ${money(data.oportunidades.forecast)}`} direction="flat" />
           <PerfTile
             value={`${data.oportunidades.conversion.current.rate}%`}
             label="Conversión de oportunidades"
             delta={oppConversionDelta.text}
             direction={oppConversionDelta.direction}
+          />
+
+          {/* ICS-87 — mi actividad y cumplimiento de seguimiento. */}
+          <PerfTile value={data.interaccionesHoy} label="Interacciones hoy" />
+          <PerfTile value={data.seguimientosVencidos} label="Seguimientos vencidos" direction={data.seguimientosVencidos > 0 ? "down" : "flat"} />
+          <PerfTile
+            value={`${data.cumplimientoNota.pct}%`}
+            label="Mi cumplimiento de seguimiento"
+            delta={`${data.cumplimientoNota.numerador}/${data.cumplimientoNota.denominador} interacciones`}
+            direction={data.cumplimientoNota.pct >= 80 ? "up" : "down"}
           />
         </div>
       ) : (

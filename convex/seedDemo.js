@@ -1,5 +1,5 @@
 import { internalMutation } from "./_generated/server";
-import { recordTimelineEvent } from "./lib";
+import { recordTimelineEvent, startOfBusinessTodayMs } from "./lib";
 
 /**
  * ICS-107 — datos de demo para `/ventas`: puebla el deployment (dev, o el
@@ -134,5 +134,168 @@ export const seedVentasDemo = internalMutation({
     }
 
     return created;
+  },
+});
+
+/**
+ * ICS-90 — datos de demo para el resto del milestone 6: interacciones y
+ * seguimientos con variedad real, para que `/actividad`, el Dashboard, "Mi
+ * desempeño" y Reportes tengan algo que enseñar (hoy en `dev` casi todo daba
+ * cero). Mismo criterio que `seedVentasDemo`: NO es un smoke test, no se
+ * autolimpia, prefijo "[DEMO ACTIVIDAD]" para poder borrarlo a mano después.
+ *
+ * Requiere al menos 1 vendedor; si hay 2 o más usa los dos primeros (por
+ * antigüedad) para que el ranking "interacciones por vendedor" tenga
+ * contenido real. Cubre a propósito: los 5 tipos de contacto, los 4
+ * resultados (+ interacciones sin resultado), `source` manual y ausente,
+ * cumplimiento de nota mixto (con y sin nota+próximo seguimiento), y
+ * seguimientos en los 4 estados que le importan a ICS-87/89/90: pendiente a
+ * futuro, vencido, completado a tiempo y completado tarde.
+ *
+ * Correr una vez:
+ *   npx convex run seedDemo:seedActividadDemo
+ */
+export const seedActividadDemo = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const vendedores = (await ctx.db.query("users").filter((q) => q.eq(q.field("role"), "vendedor")).collect()).sort(
+      (a, b) => a._creationTime - b._creationTime,
+    );
+    if (vendedores.length === 0) {
+      throw new Error("No hay ningún usuario vendedor en este deployment — crea uno primero.");
+    }
+    const vendorA = vendedores[0];
+    const vendorB = vendedores[1] ?? vendedores[0];
+
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    const todayCutoff = startOfBusinessTodayMs();
+
+    async function makeProspect(name, ownerId, stage = "contactado") {
+      return ctx.db.insert("prospects", {
+        name: `[DEMO ACTIVIDAD] ${name}`,
+        phone: "55 0000 0001",
+        channel: "whatsapp",
+        interest: "Datos de demo para actividad/dashboard/reportes",
+        note: "Creado por seedDemo.seedActividadDemo.",
+        stage,
+        stageChangedAt: now,
+        ownerId,
+      });
+    }
+
+    async function addInteraction(prospectId, registeredBy, { type, note, outcome, source, at, nextFollowUpId }) {
+      const interactionId = await ctx.db.insert("interactions", {
+        prospectId,
+        at,
+        type,
+        note,
+        registeredBy,
+        outcome,
+        source,
+        nextFollowUpId,
+      });
+      await recordTimelineEvent(ctx, { prospectId, at, type: "interaccion", actorId: registeredBy, interactionId });
+      return interactionId;
+    }
+
+    async function addFollowUp(prospectId, ownerId, { at, type, status, completedAt, resolution }) {
+      return ctx.db.insert("followUps", {
+        prospectId,
+        at,
+        type,
+        status,
+        ownerId,
+        completedAt,
+        completedBy: completedAt ? ownerId : undefined,
+        resolution,
+      });
+    }
+
+    let interactions = 0;
+    let followUps = 0;
+    let prospects = 0;
+
+    // 1) Vendor A — interacción con nota + próximo seguimiento (CUMPLE), tipo llamada, resultado positivo.
+    {
+      const prospectId = await makeProspect("Tlapalería Demo A1", vendorA._id);
+      const followUpId = await addFollowUp(prospectId, vendorA._id, { at: now + 2 * DAY, type: "llamada", status: "pendiente" });
+      await addInteraction(prospectId, vendorA._id, {
+        type: "llamada", note: "Muy interesado, pidió cotización formal.", outcome: "positivo", source: "manual",
+        at: now - DAY, nextFollowUpId: followUpId,
+      });
+      prospects++; interactions++; followUps++;
+    }
+
+    // 2) Vendor A — interacción SIN próximo seguimiento (NO cumple), whatsapp, sin resultado.
+    {
+      const prospectId = await makeProspect("Papelería Demo A2", vendorA._id, "nuevo");
+      await addInteraction(prospectId, vendorA._id, {
+        type: "whatsapp", note: "Primer contacto, todavía sin definir interés.", source: "manual", at: now - 3 * DAY,
+      });
+      prospects++; interactions++;
+    }
+
+    // 3) Vendor A — seguimiento VENCIDO (nunca se cerró), tipo visita.
+    {
+      const prospectId = await makeProspect("Ferretería Demo A3", vendorA._id);
+      await addFollowUp(prospectId, vendorA._id, { at: todayCutoff - 4 * DAY, type: "visita", status: "pendiente" });
+      followUps++; prospects++;
+    }
+
+    // 4) Vendor A — interacción de resultado negativo, email, con nota pero sin next follow-up (activo, así que en la práctica violaría ICS-16 — pero el seed inserta directo a la tabla sin pasar por la mutation, es intencional para tener un caso "no cumple" con nota presente).
+    {
+      const prospectId = await makeProspect("Refaccionaria Demo A4", vendorA._id, "cotizacion");
+      await addInteraction(prospectId, vendorA._id, {
+        type: "email", note: "Cotización enviada, sin respuesta después de una semana.", outcome: "negativo", source: "manual", at: now - 5 * DAY,
+      });
+      prospects++; interactions++;
+    }
+
+    // 5) Vendor A — seguimiento completado A TIEMPO (llamada de ayer, cerrado el mismo día).
+    {
+      const prospectId = await makeProspect("Consultorio Demo A5", vendorA._id, "negociacion");
+      const at = now - 2 * DAY;
+      await addFollowUp(prospectId, vendorA._id, { at, type: "otro", status: "completado", completedAt: at, resolution: "hecho" });
+      followUps++; prospects++;
+    }
+
+    // 6) Vendor B — interacción con nota + próximo seguimiento (CUMPLE), whatsapp, resultado sin-respuesta.
+    {
+      const prospectId = await makeProspect("Cocina Demo B1", vendorB._id);
+      const followUpId = await addFollowUp(prospectId, vendorB._id, { at: now + DAY, type: "whatsapp", status: "pendiente" });
+      await addInteraction(prospectId, vendorB._id, {
+        type: "whatsapp", note: "Mandé el catálogo, va a revisar con su socio.", outcome: "sin-respuesta", source: "manual",
+        at: now - 12 * 60 * 60 * 1000, nextFollowUpId: followUpId,
+      });
+      prospects++; interactions++; followUps++;
+    }
+
+    // 7) Vendor B — interacción `source` AUSENTE (dato anterior a ICS-78 — debe contar como manual en cumplimientoNota), neutro, sin próximo seguimiento.
+    {
+      const prospectId = await makeProspect("Taller Demo B2", vendorB._id, "nuevo");
+      await addInteraction(prospectId, vendorB._id, { type: "visita", note: "Pasó a preguntar precios.", outcome: "neutro", at: now - 4 * DAY });
+      prospects++; interactions++;
+    }
+
+    // 8) Vendor B — seguimiento completado TARDE (programado hace 5 días, cerrado ayer).
+    {
+      const prospectId = await makeProspect("Mueblería Demo B3", vendorB._id, "cotizacion");
+      const scheduledAt = now - 5 * DAY;
+      const completedAt = now - DAY;
+      await addFollowUp(prospectId, vendorB._id, { at: scheduledAt, type: "llamada", status: "completado", completedAt, resolution: "hecho" });
+      followUps++; prospects++;
+    }
+
+    // 9) Vendor B — interacción tipo "otro", resultado positivo, sin nota de próximo seguimiento (activo — otro caso "no cumple").
+    {
+      const prospectId = await makeProspect("Boutique Demo B4", vendorB._id, "contactado");
+      await addInteraction(prospectId, vendorB._id, {
+        type: "otro", note: "Contacto por referido, quedó de llamar la próxima semana.", outcome: "positivo", source: "manual", at: now - 6 * 60 * 60 * 1000,
+      });
+      prospects++; interactions++;
+    }
+
+    return { prospects, interactions, followUps, vendorA: vendorA.name, vendorB: vendorB.name };
   },
 });
