@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "convex:dev": "convex dev"
+    "convex:dev": "convex dev",
+    "railway:build": "convex deploy --cmd 'npm run build'"
   },
   "dependencies": {
     "@auth/core": "^0.41.1",
