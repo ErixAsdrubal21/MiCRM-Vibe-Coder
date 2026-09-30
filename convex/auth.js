@@ -1,7 +1,6 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
-import Google from "@auth/core/providers/google";
 import { internal } from "./_generated/api";
 
 /**
@@ -14,7 +13,7 @@ import { internal } from "./_generated/api";
  * hace falta tocar código ni volver a desplegar.
  *
  * Implementado como su propio provider (`ConvexCredentials`, la misma base
- * que usa `Password` por debajo) en vez de tocar `Password`/Google: ninguna
+ * que usa `Password` por debajo) en vez de tocar `Password`: ninguna
  * cuenta ni flujo existente cambia, y quitar esto es borrar un bloque
  * autocontenido. `authorize` mismo revisa la bandera — no depender de que
  * el cliente decida no ofrecer el botón, que solo oculta la opción, no la
@@ -42,8 +41,7 @@ const OpenAccess = ConvexCredentials({
  * provisionPassword), no con un formulario. `createOrUpdateUser` refuerza
  * esto del lado del servidor: nunca crea un usuario nuevo, solo vincula la
  * credencial a una fila de `users` que ya existe con ese email — cualquier
- * otro correo se rechaza explícitamente, incluso vía Google (que sí verifica
- * el email, pero verificar el email no es lo mismo que autorizar acceso).
+ * otro correo se rechaza explícitamente.
  *
  * El `profile` de abajo bloquea `flow: "signUp"` del lado del servidor. Sin
  * esto, `createOrUpdateUser` (arriba) vincularía cualquier signUp público a
@@ -53,16 +51,6 @@ const OpenAccess = ConvexCredentials({
  * (toma de cuenta). `scripts/provision-user.mjs` no pasa por este flujo:
  * usa `createAccount` directo desde una `internalAction`, que no tiene
  * `flow` en absoluto.
- *
- * ICS-7: Google se cierra con la misma regla — `createOrUpdateUser` no
- * distingue provider, así que "iniciar sesión con Google" solo funciona
- * para un correo que ya tiene fila en `users` (aprovisionada por un admin).
- * Esto se aparta a propósito del criterio de aceptación original de ICS-7
- * ("un usuario nuevo puede crear su cuenta con un clic usando Google") — ese
- * criterio es anterior a la decisión de sistema cerrado de ICS-6/8, y
- * reabrir auto-registro solo para Google dejaría la misma vía de toma de
- * cuenta que se cerró ahí (cualquiera con acceso a
- * carlos@minegocio.com en Google podría auto-crearse esa cuenta).
  */
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
@@ -74,16 +62,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         return { email: params.email };
       },
     }),
-    Google,
     OpenAccess,
   ],
   callbacks: {
-    async createOrUpdateUser(ctx, { existingUserId, type, profile }) {
+    async createOrUpdateUser(ctx, { existingUserId, profile }) {
       if (existingUserId) return existingUserId;
-
-      if (type === "oauth" && profile.email_verified === false) {
-        throw new Error("Correo de Google no verificado.");
-      }
 
       const existing = await ctx.db
         .query("users")

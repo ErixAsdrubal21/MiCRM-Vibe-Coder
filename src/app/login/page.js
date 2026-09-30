@@ -7,11 +7,11 @@ import { Button } from "@/design/components/core/Button.jsx";
 import "./login.css";
 
 /**
- * ICS-6/7/8: login real (Convex Auth, Password + Google). Sin registro
+ * ICS-6/7/8: login real (Convex Auth, Password). Sin registro
  * público a propósito — Carlos/Marta se aprovisionan con
  * scripts/provision-user.mjs, no desde este formulario (ver
  * convex/auth.js:createOrUpdateUser, que rechaza cualquier correo que no
- * exista ya como fila en `users`, incluso vía Google).
+ * exista ya como fila en `users`).
  */
 export default function Login() {
   const { signIn } = useAuthActions();
@@ -20,7 +20,6 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [showForgotHelp, setShowForgotHelp] = useState(false);
 
   async function handleSubmit(e) {
@@ -33,17 +32,6 @@ export default function Login() {
     } catch (err) {
       setError("Correo o contraseña incorrectos.");
       setSubmitting(false);
-    }
-  }
-
-  async function handleGoogle() {
-    setError("");
-    setGoogleSubmitting(true);
-    try {
-      await signIn("google");
-    } catch (err) {
-      setError("No se pudo iniciar sesión con Google.");
-      setGoogleSubmitting(false);
     }
   }
 
@@ -71,10 +59,10 @@ export default function Login() {
           <p className="field-label" style={{ color: "var(--color-critical)" }}>
             Modo de desarrollo — entrar sin contraseña
           </p>
-          <Button type="button" variant="secondary" full disabled={submitting || googleSubmitting} onClick={() => handleOpenAccess("vendedor")}>
+          <Button type="button" variant="secondary" full disabled={submitting} onClick={() => handleOpenAccess("vendedor")}>
             Entrar como Carlos (vendedor)
           </Button>
-          <Button type="button" variant="secondary" full disabled={submitting || googleSubmitting} onClick={() => handleOpenAccess("administrador")}>
+          <Button type="button" variant="secondary" full disabled={submitting} onClick={() => handleOpenAccess("administrador")}>
             Entrar como Marta (administradora)
           </Button>
           <div className="or-divider">
@@ -118,26 +106,10 @@ export default function Login() {
 
         {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 }}>{error}</p>}
 
-        <Button type="submit" variant="primary" full disabled={submitting || googleSubmitting}>
+        <Button type="submit" variant="primary" full disabled={submitting}>
           {submitting ? "Entrando..." : "Entrar"}
         </Button>
       </form>
-
-      <div className="or-divider">
-        <hr className="divider" />
-        <span>o</span>
-        <hr className="divider" />
-      </div>
-
-      <Button
-        type="button"
-        variant="secondary"
-        full
-        disabled={submitting || googleSubmitting}
-        onClick={handleGoogle}
-      >
-        {googleSubmitting ? "Conectando..." : "Continuar con Google"}
-      </Button>
 
       {showForgotHelp ? (
         <p className="forgot-help">
