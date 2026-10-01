@@ -78,15 +78,28 @@ export const getUserByEmail = internalQuery({
 });
 
 /**
- * El primer usuario de un rol — solo para el provider "open-access" de
- * convex/auth.js (ver ahí el porqué). MVP de un único vendedor/administrador,
- * mismo supuesto que ya usa `computeCarlosBlock` en metrics.js.
+ * ICS-108 — cambia el correo de una cuenta existente: la fila de `users` (con
+ * la que se vincula el acceso con Google) y su credencial de Password (cuyo
+ * `providerAccountId` es el correo con el que se escribe en el login). Rol,
+ * nombre y datos del CRM no cambian. `internalMutation`: solo se corre con
+ * `npx convex run users:changeUserEmail`, nunca desde la UI.
  */
-export const getFirstUserByRole = internalQuery({
-  args: { role },
-  handler: async (ctx, { role: targetRole }) => {
-    const users = await ctx.db.query("users").collect();
-    return users.find((u) => u.role === targetRole) ?? null;
+export const changeUserEmail = internalMutation({
+  args: { from: v.string(), to: v.string() },
+  handler: async (ctx, { from, to }) => {
+    const newEmail = to.trim().toLowerCase();
+    const user = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", from)).unique();
+    if (!user) throw new Error(`No existe ninguna cuenta con el correo ${from}.`);
+    const taken = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", newEmail)).unique();
+    if (taken) throw new Error(`Ya existe una cuenta con el correo ${newEmail}.`);
+
+    await ctx.db.patch(user._id, { email: newEmail });
+    const passwordAccount = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) => q.eq("provider", "password").eq("providerAccountId", from))
+      .unique();
+    if (passwordAccount) await ctx.db.patch(passwordAccount._id, { providerAccountId: newEmail });
+    return { userId: user._id, email: newEmail, passwordUpdated: Boolean(passwordAccount) };
   },
 });
 

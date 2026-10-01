@@ -1,26 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { Button } from "@/design/components/core/Button.jsx";
 import "./login.css";
 
+// Google regresa aquí (no a "/") para poder avisar si la cuenta fue rechazada:
+// Convex Auth, cuando `createOrUpdateUser` rechaza, redirige sin `code` y sin
+// mensaje de error.
+const GOOGLE_RETURN = "/login?via=google";
+const GOOGLE_REJECTED_MSG = "Tu cuenta de Google no tiene acceso a este CRM. Contacta a un administrador.";
+
+const subscribeNever = () => () => {};
+const readBackFromGoogle = () => new URLSearchParams(window.location.search).get("via") === "google";
+
 /**
- * ICS-6/7/8: login real (Convex Auth, Password). Sin registro
- * público a propósito — Carlos/Marta se aprovisionan con
+ * ICS-6/7/8 + ICS-108: login real (Convex Auth, Password + Google). Sin
+ * registro público a propósito — Carlos/Marta se aprovisionan con
  * scripts/provision-user.mjs, no desde este formulario (ver
  * convex/auth.js:createOrUpdateUser, que rechaza cualquier correo que no
- * exista ya como fila en `users`).
+ * exista ya como fila en `users`, también vía Google).
  */
 export default function Login() {
   const { signIn } = useAuthActions();
+  const { isLoading, isAuthenticated } = useConvexAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [showForgotHelp, setShowForgotHelp] = useState(false);
+
+  const backFromGoogle = useSyncExternalStore(subscribeNever, readBackFromGoogle, () => false);
+  const googleRejected = backFromGoogle && !isLoading && !isAuthenticated;
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) router.replace("/");
+  }, [isLoading, isAuthenticated, router]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -35,43 +53,21 @@ export default function Login() {
     }
   }
 
-  async function handleOpenAccess(role) {
+  async function handleGoogle() {
     setError("");
-    setSubmitting(true);
+    setGoogleSubmitting(true);
     try {
-      await signIn("open-access", { role });
-      router.replace("/");
+      await signIn("google", { redirectTo: GOOGLE_RETURN });
     } catch (err) {
-      setError("No se pudo entrar sin contraseña.");
-      setSubmitting(false);
+      setError("No se pudo iniciar sesión con Google.");
+      setGoogleSubmitting(false);
     }
   }
-
-  const openAccess = process.env.NEXT_PUBLIC_OPEN_ACCESS === "1";
 
   return (
     <div className="login-screen">
       <p className="wordmark">Mi Negocio<span>CRM</span></p>
       <p className="login-tag">Organiza a tus clientes sin complicarte</p>
-
-      {openAccess && (
-        <div className="field-group" style={{ gap: 8 }}>
-          <p className="field-label" style={{ color: "var(--color-critical)" }}>
-            Modo de desarrollo — entrar sin contraseña
-          </p>
-          <Button type="button" variant="secondary" full disabled={submitting} onClick={() => handleOpenAccess("vendedor")}>
-            Entrar como Carlos (vendedor)
-          </Button>
-          <Button type="button" variant="secondary" full disabled={submitting} onClick={() => handleOpenAccess("administrador")}>
-            Entrar como Marta (administradora)
-          </Button>
-          <div className="or-divider">
-            <hr className="divider" />
-            <span>o con tu cuenta</span>
-            <hr className="divider" />
-          </div>
-        </div>
-      )}
 
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="field-group">
@@ -104,12 +100,26 @@ export default function Login() {
           </label>
         </div>
 
-        {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 }}>{error}</p>}
+        {(error || googleRejected) && (
+          <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 }}>
+            {error || GOOGLE_REJECTED_MSG}
+          </p>
+        )}
 
-        <Button type="submit" variant="primary" full disabled={submitting}>
+        <Button type="submit" variant="primary" full disabled={submitting || googleSubmitting}>
           {submitting ? "Entrando..." : "Entrar"}
         </Button>
       </form>
+
+      <div className="or-divider">
+        <hr className="divider" />
+        <span>o</span>
+        <hr className="divider" />
+      </div>
+
+      <Button type="button" variant="secondary" full disabled={submitting || googleSubmitting} onClick={handleGoogle}>
+        {googleSubmitting ? "Conectando..." : "Continuar con Google"}
+      </Button>
 
       {showForgotHelp ? (
         <p className="forgot-help">
