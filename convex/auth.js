@@ -1,6 +1,7 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import Google from "@auth/core/providers/google";
 import { Password } from "@convex-dev/auth/providers/Password";
+import { findUsersByEmailInsensitive } from "./lib.js";
 
 /**
  * ICS-108 — acceso con Google, solo para cuentas ya aprovisionadas.
@@ -17,19 +18,19 @@ import { Password } from "@convex-dev/auth/providers/Password";
  * Convex. URI de redirección en Google Cloud:
  * `https://<deployment>.convex.site/api/auth/callback/google`.
  */
-const GoogleProvisionedOnly = Google({
-  profile(googleProfile) {
-    if (!googleProfile.email_verified) {
-      throw new Error("El correo de Google no está verificado.");
-    }
-    return {
-      id: googleProfile.sub,
-      email: googleProfile.email.trim().toLowerCase(),
-      name: googleProfile.name,
-      image: googleProfile.picture,
-    };
-  },
-});
+export function googleProfileOrReject(googleProfile) {
+  if (googleProfile.email_verified !== true) {
+    throw new Error("El correo de Google no está verificado.");
+  }
+  return {
+    id: googleProfile.sub,
+    email: googleProfile.email.trim().toLowerCase(),
+    name: googleProfile.name,
+    image: googleProfile.picture,
+  };
+}
+
+const GoogleProvisionedOnly = Google({ profile: googleProfileOrReject });
 
 /**
  * Seguridad real (ICS-6/7/8, reemplaza el login mock): sin registro público.
@@ -37,8 +38,9 @@ const GoogleProvisionedOnly = Google({
  * aprovisionan con `scripts/provision-user.mjs` (ver convex/users.js:
  * provisionPassword), no con un formulario. `createOrUpdateUser` refuerza
  * esto del lado del servidor: nunca crea un usuario nuevo, solo vincula la
- * credencial a una fila de `users` que ya existe con ese email y con rol —
- * cualquier otro correo se rechaza explícitamente.
+ * credencial a una fila de `users` que ya existe con ese email (sin distinguir
+ * mayúsculas, ver `findUsersByEmailInsensitive`) y con rol — cualquier otro
+ * correo, o uno que coincida con más de una fila, se rechaza explícitamente.
  *
  * El `profile` de abajo bloquea `flow: "signUp"` del lado del servidor. Sin
  * esto, `createOrUpdateUser` (arriba) vincularía cualquier signUp público a
@@ -68,11 +70,8 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     async createOrUpdateUser(ctx, { existingUserId, profile }) {
       if (existingUserId) return existingUserId;
 
-      const existing = await ctx.db
-        .query("users")
-        .withIndex("by_email", (q) => q.eq("email", profile.email))
-        .unique();
-      if (existing?.role) return existing._id;
+      const matches = await findUsersByEmailInsensitive(ctx.db, profile.email);
+      if (matches.length === 1 && matches[0].role) return matches[0]._id;
 
       throw new Error("No existe una cuenta para este correo. Contacta a un administrador.");
     },

@@ -228,3 +228,76 @@ export const provisionDemoAdmin = internalMutation({
     return { created: true, id };
   },
 });
+
+/** ICS-108: los helpers de abajo solo tocan correos de prueba con este prefijo. */
+const SMOKE_AUTH_PREFIX = "smoke-ics108";
+
+function requireSmokeAuthEmail(email) {
+  if (!email.toLowerCase().startsWith(SMOKE_AUTH_PREFIX)) {
+    throw new Error(`Rechazado: "${email}" no es un correo de prueba (${SMOKE_AUTH_PREFIX}…).`);
+  }
+}
+
+/**
+ * ICS-108 — inserta una fila `users` de prueba tal cual, sin pasar por
+ * `createPendingUserRow`. Existe para poder sembrar casos que el flujo normal
+ * ya impide (dos filas que solo difieren en mayúsculas) y comprobar que el
+ * login con Google las rechaza. `role` es opcional aquí a propósito: el smoke
+ * comprueba que el esquema de `users` rechaza una fila sin rol.
+ */
+export const insertSmokeAuthUser = internalMutation({
+  args: { email: v.string(), role: v.optional(v.string()) },
+  handler: async (ctx, { email, role }) => {
+    requireSmokeAuthEmail(email);
+    return ctx.db.insert("users", { email, name: "[SMOKE ICS-108]", ...(role ? { role } : {}) });
+  },
+});
+
+/** ICS-108 — estado de auth de las filas de prueba, para las aserciones del smoke. */
+export const dumpSmokeAuth = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const users = (await ctx.db.query("users").collect()).filter((u) =>
+      u.email?.toLowerCase().startsWith(SMOKE_AUTH_PREFIX),
+    );
+    const out = [];
+    for (const u of users) {
+      const accounts = await ctx.db.query("authAccounts").withIndex("userIdAndProvider", (q) => q.eq("userId", u._id)).collect();
+      const sessions = await ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", u._id)).collect();
+      out.push({
+        _id: u._id,
+        email: u.email,
+        role: u.role ?? null,
+        accounts: accounts.map((a) => `${a.provider}:${a.providerAccountId}`),
+        sessions: sessions.length,
+      });
+    }
+    return { totalUsers: (await ctx.db.query("users").collect()).length, smoke: out };
+  },
+});
+
+/** ICS-108 — borra todas las filas de prueba y lo que Convex Auth cuelga de ellas. */
+export const deleteSmokeAuthUsers = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const users = (await ctx.db.query("users").collect()).filter((u) =>
+      u.email?.toLowerCase().startsWith(SMOKE_AUTH_PREFIX),
+    );
+    for (const u of users) {
+      const accounts = await ctx.db.query("authAccounts").withIndex("userIdAndProvider", (q) => q.eq("userId", u._id)).collect();
+      for (const a of accounts) {
+        const codes = await ctx.db.query("authVerificationCodes").withIndex("accountId", (q) => q.eq("accountId", a._id)).collect();
+        for (const c of codes) await ctx.db.delete(c._id);
+        await ctx.db.delete(a._id);
+      }
+      const sessions = await ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", u._id)).collect();
+      for (const s of sessions) {
+        const tokens = await ctx.db.query("authRefreshTokens").withIndex("sessionId", (q) => q.eq("sessionId", s._id)).collect();
+        for (const t of tokens) await ctx.db.delete(t._id);
+        await ctx.db.delete(s._id);
+      }
+      await ctx.db.delete(u._id);
+    }
+    return { deleted: users.length };
+  },
+});

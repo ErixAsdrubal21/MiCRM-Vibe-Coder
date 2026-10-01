@@ -10,6 +10,7 @@ import {
 } from "@convex-dev/auth/server";
 import { api, internal } from "./_generated/api";
 import { requireAdministrador } from "./permissions";
+import { findUsersByEmailInsensitive } from "./lib.js";
 import { role } from "./validators.js";
 
 /**
@@ -90,8 +91,8 @@ export const changeUserEmail = internalMutation({
     const newEmail = to.trim().toLowerCase();
     const user = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", from)).unique();
     if (!user) throw new Error(`No existe ninguna cuenta con el correo ${from}.`);
-    const taken = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", newEmail)).unique();
-    if (taken) throw new Error(`Ya existe una cuenta con el correo ${newEmail}.`);
+    const taken = await findUsersByEmailInsensitive(ctx.db, newEmail);
+    if (taken.length > 0) throw new Error(`Ya existe una cuenta con el correo ${newEmail}.`);
 
     await ctx.db.patch(user._id, { email: newEmail });
     const passwordAccount = await ctx.db
@@ -122,8 +123,8 @@ export const listTeam = query({
 export const createPendingUserRow = internalMutation({
   args: { email: v.string(), name: v.string(), role },
   handler: async (ctx, { email, name, role: userRole }) => {
-    const existing = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).unique();
-    if (existing) throw new Error("Ya existe una cuenta con ese correo.");
+    const existing = await findUsersByEmailInsensitive(ctx.db, email);
+    if (existing.length > 0) throw new Error("Ya existe una cuenta con ese correo.");
     return ctx.db.insert("users", { email, name, role: userRole });
   },
 });

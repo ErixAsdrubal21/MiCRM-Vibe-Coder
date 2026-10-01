@@ -222,3 +222,18 @@ export function resolveClosedAt(closedDate) {
   }
   return calendarDateToMs(closedDate);
 }
+
+/**
+ * ICS-108 — filas de `users` cuyo correo coincide sin distinguir mayúsculas.
+ * Las invitaciones guardan el correo tal como se escribió (`Persona@gmail.com`)
+ * y Google siempre lo entrega en minúsculas; un `by_email` exacto los dejaría
+ * fuera. No se reescribe el correo guardado: es también el `providerAccountId`
+ * de su credencial de Password. Recorre `users` completa — el equipo es de
+ * unas pocas personas. Devuelve todas las coincidencias para que el llamador
+ * trate una colisión (`A@x` y `a@x`) como ambigua en vez de elegir una.
+ */
+export async function findUsersByEmailInsensitive(db, email) {
+  const target = email.trim().toLowerCase();
+  const users = await db.query("users").collect();
+  return users.filter((u) => u.email?.toLowerCase() === target);
+}
