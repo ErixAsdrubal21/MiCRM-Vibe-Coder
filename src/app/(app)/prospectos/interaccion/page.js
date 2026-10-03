@@ -1,23 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../../../../convex/_generated/api";
+import { api } from "../../../../../convex/_generated/api";
 import { Icon } from "@/design/components/core/Icon.jsx";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { isActiveStage, CONTACT_TYPES, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
 import { todayISO, plusDaysISO } from "@/lib/dates.js";
+import { prospectoHref } from "@/lib/routes.js";
 
 function defaultFollowUpDate(prospect) {
   return plusDaysISO(prospect.stage === "cotizacion" ? 2 : 1);
 }
 
 export default function RegistrarInteraccion() {
-  const { id } = useParams();
+  // `/prospectos/interaccion?id=…` (ver src/lib/routes.js).
+  const id = useSearchParams().get("id");
   const router = useRouter();
-  const prospect = useQuery(api.prospects.get, { id });
+  const prospectResult = useQuery(api.prospects.get, id ? { id } : "skip");
+  const prospect = id ? prospectResult : null;
   const addInteraction = useMutation(api.interactions.add);
 
   const [type, setType] = useState("whatsapp");
@@ -61,7 +64,7 @@ export default function RegistrarInteraccion() {
         note,
         nextFollowUp: followUpDateValue ? { date: followUpDateValue, type: followUpType } : undefined,
       });
-      router.replace(`/prospectos/${prospect._id}`);
+      router.replace(prospectoHref(prospect._id));
     } catch (err) {
       setError(err.message ?? "No se pudo registrar la interacción.");
       setSubmitting(false);

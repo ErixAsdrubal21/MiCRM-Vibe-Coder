@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Icon } from "@/design/components/core/Icon.jsx";
@@ -15,6 +15,7 @@ import { OUTCOME_VALUES, OUTCOME_LABELS, RESOLUTION_LABELS, OPPORTUNITY_OPEN_STA
 import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
 import StageChangePicker from "@/components/StageChangePicker.js";
 import "./ficha.css";
+import { interaccionHref, ventaHref } from "@/lib/routes.js";
 
 const CHANNEL_LABEL_BY_VALUE = Object.fromEntries(CHANNELS.map((c) => [c.value, c.label]));
 const OUTCOME_TAG_VARIANT = { positivo: "success", negativo: "risk", neutro: "neutral", "sin-respuesta": "neutral" };
@@ -34,13 +35,16 @@ function defaultFollowUpDate(prospect) {
 }
 
 export default function FichaProspecto() {
-  const { id } = useParams();
+  // `/prospectos/ficha?id=…` (ver src/lib/routes.js). Sin `id`, las queries se
+  // saltan y la pantalla cae en "Prospecto no encontrado".
+  const id = useSearchParams().get("id");
   const router = useRouter();
   const session = useSession();
-  const prospect = useQuery(api.prospects.get, { id });
-  const timeline = usePaginatedQuery(api.timeline.listByProspect, { prospectId: id }, { initialNumItems: 15 });
-  const opportunities = usePaginatedQuery(api.opportunities.listByProspect, { prospectId: id }, { initialNumItems: 5 });
-  const sales = usePaginatedQuery(api.sales.listByProspect, { prospectId: id }, { initialNumItems: 5 });
+  const prospectResult = useQuery(api.prospects.get, id ? { id } : "skip");
+  const prospect = id ? prospectResult : null;
+  const timeline = usePaginatedQuery(api.timeline.listByProspect, id ? { prospectId: id } : "skip", { initialNumItems: 15 });
+  const opportunities = usePaginatedQuery(api.opportunities.listByProspect, id ? { prospectId: id } : "skip", { initialNumItems: 5 });
+  const sales = usePaginatedQuery(api.sales.listByProspect, id ? { prospectId: id } : "skip", { initialNumItems: 5 });
   const updateProspect = useMutation(api.prospects.update);
   const editInteraction = useMutation(api.interactions.edit);
   const removeInteraction = useMutation(api.interactions.remove);
@@ -464,7 +468,7 @@ export default function FichaProspecto() {
               key={s._id}
               className="list-row"
               style={{ border: "none", width: "100%", cursor: "pointer", textAlign: "left", opacity: s.voidedAt ? 0.6 : 1 }}
-              onClick={() => router.push(`/ventas/${s._id}`)}
+              onClick={() => router.push(ventaHref(s._id))}
             >
               <div>
                 <p className="list-row__title">{money(s.amount)} · {s.product}</p>
@@ -519,7 +523,7 @@ export default function FichaProspecto() {
 
       {canEdit && (
         <div className="action-row">
-          <Button variant="primary" onClick={() => router.push(`/prospectos/${prospect._id}/interaccion`)}>Registrar interacción</Button>
+          <Button variant="primary" onClick={() => router.push(interaccionHref(prospect._id))}>Registrar interacción</Button>
         </div>
       )}
     </>

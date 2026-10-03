@@ -9,6 +9,7 @@ import { Icon } from "@/design/components/core/Icon.jsx";
 import { Badge } from "@/design/components/core/Badge.jsx";
 import { Tag } from "@/design/components/core/Tag.jsx";
 import { contactMetaLabel, daysSinceContact, isActiveStage, STAGES } from "@/lib/prospects.js";
+import { prospectoHref } from "@/lib/routes.js";
 
 const STAGE_LABELS = {
   nuevo: "Nuevo",
@@ -87,7 +88,7 @@ export default function ProspectosList() {
           key={p._id}
           className="list-row"
           style={{ border: "none", width: "100%", cursor: "pointer", textAlign: "left" }}
-          onClick={() => router.push(`/prospectos/${p._id}`)}
+          onClick={() => router.push(prospectoHref(p._id))}
         >
           <div>
             <p className="list-row__title">{p.name}</p>

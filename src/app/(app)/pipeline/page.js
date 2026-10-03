@@ -11,6 +11,7 @@ import { useSession } from "@/lib/session.js";
 import { STAGES, daysInStage } from "@/lib/prospects.js";
 import StageChangePicker from "@/components/StageChangePicker.js";
 import "./pipeline.css";
+import { prospectoHref } from "@/lib/routes.js";
 
 function isThisMonth(ms) {
   const d = new Date(ms);
@@ -67,7 +68,7 @@ export default function Pipeline() {
                   </div>
                 ) : (
                   <div className="stage-block__row" key={p._id}>
-                    <button className="stage-block__row-name" onClick={() => router.push(`/prospectos/${p._id}`)}>
+                    <button className="stage-block__row-name" onClick={() => router.push(prospectoHref(p._id))}>
                       {p.name}
                     </button>
                     <div className="stage-block__row-right">

@@ -47,8 +47,9 @@ src/
     layout.js         # Importa el design system global + ConvexClientProvider
     login/page.js
     (app)/             # route group con AppLayout (nav por rol, requiere sesión)
-      prospectos/, prospectos/nuevo/, prospectos/[id]/, prospectos/[id]/interaccion/
-      pipeline/, tareas/, dashboard/, mi-desempeno/, reportes/, configuracion/
+      prospectos/, prospectos/nuevo/, prospectos/ficha/ (?id=), prospectos/interaccion/ (?id=)
+      ventas/, ventas/detalle/ (?id=), ventas/nueva-oportunidad/, ventas/nueva-venta/
+      pipeline/, tareas/, tareas/nueva/, actividad/, dashboard/, mi-desempeno/, reportes/, configuracion/
     ConvexClientProvider.js
   components/
     StageChangePicker.js  # compartido entre Ficha y Pipeline

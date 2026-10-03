@@ -12,6 +12,7 @@ import { Tag } from "@/design/components/core/Tag.jsx";
 import { useSession, homePathForRole } from "@/lib/session.js";
 import { isActiveStage, contactMetaLabel, daysSinceContact, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
 import { todayISO, plusDaysISO } from "@/lib/dates.js";
+import { prospectoHref } from "@/lib/routes.js";
 
 /**
  * ICS-92: "Nueva tarea" desde /tareas — agenda un seguimiento eligiendo el
@@ -50,7 +51,7 @@ export default function NuevaTarea() {
     setError("");
     try {
       await createFollowUp({ prospectId: selected._id, date: date || plusDaysISO(1), type });
-      router.replace(`/prospectos/${selected._id}`);
+      router.replace(prospectoHref(selected._id));
     } catch (err) {
       setError(err.message ?? "No se pudo programar el seguimiento.");
       setSubmitting(false);
