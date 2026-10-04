@@ -7,6 +7,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { CHANNELS } from "@/lib/prospects.js";
+import { prospectoHref } from "@/lib/routes.js";
 
 export default function NuevoProspecto() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function NuevoProspecto() {
     setSubmitting(true);
     try {
       const prospect = await createProspect({ name, phone, channel, interest, note });
-      router.replace(`/prospectos/${prospect._id}`);
+      router.replace(prospectoHref(prospect._id));
     } catch (err) {
       setError(err.message ?? "No se pudo guardar el prospecto.");
       setSubmitting(false);

@@ -11,6 +11,7 @@ import { Tag } from "@/design/components/core/Tag.jsx";
 import { PeriodToggle } from "@/design/components/core/PeriodToggle.jsx";
 import { useSession } from "@/lib/session.js";
 import "./ventas.css";
+import { prospectoHref, ventaHref } from "@/lib/routes.js";
 
 /**
  * ICS-103 — pantalla global /ventas: dos vistas conmutables sobre
@@ -169,7 +170,7 @@ export default function Ventas() {
               <p className="empty-state">Sin oportunidades{stageFilter ? " en esta etapa" : ""}.</p>
             ) : (
               opportunities.results.map((o) => (
-                <button key={o._id} className="opp-row" onClick={() => router.push(`/prospectos/${o.prospectId}`)}>
+                <button key={o._id} className="opp-row" onClick={() => router.push(prospectoHref(o.prospectId))}>
                   <div className="opp-row__head">
                     <span className="list-row__title">{o.prospectName ?? "Cliente"}</span>
                     <Badge stage={o.stage} />
@@ -224,7 +225,7 @@ export default function Ventas() {
                 <button
                   key={s._id}
                   className={`sale-row${s.voidedAt ? " sale-row--voided" : ""}`}
-                  onClick={() => router.push(`/ventas/${s._id}`)}
+                  onClick={() => router.push(ventaHref(s._id))}
                 >
                   <div className="sale-row__head">
                     <span className="list-row__title">{s.prospectName ?? "Cliente"}</span>

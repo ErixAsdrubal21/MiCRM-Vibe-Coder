@@ -1,4 +1,4 @@
-// Pantalla nueva — /ventas/[id]. Recreación de src/app/(app)/ventas/[id]/page.js
+// Pantalla nueva — /ventas/detalle?id=. Recreación de src/app/(app)/ventas/detalle/page.js
 // (ICS-103). "Anular" solo la ve un administrador (sales.void, ICS-101 B3: no
 // reabre la oportunidad de origen).
 function money(n) { return `$${n.toLocaleString('es-MX')}`; }

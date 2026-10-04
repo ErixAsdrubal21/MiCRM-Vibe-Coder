@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Icon } from "@/design/components/core/Icon.jsx";
@@ -17,10 +17,12 @@ function money(n) {
 
 /** ICS-103 — detalle de una venta. "Anular" solo la ve un administrador (ICS-101 sales.void, B3: no reabre la oportunidad). */
 export default function VentaDetalle() {
-  const { id } = useParams();
+  // `/ventas/detalle?id=…` (ver src/lib/routes.js).
+  const id = useSearchParams().get("id");
   const router = useRouter();
   const session = useSession();
-  const sale = useQuery(api.sales.getById, { id });
+  const saleResult = useQuery(api.sales.getById, id ? { id } : "skip");
+  const sale = id ? saleResult : null;
   const voidSale = useMutation(api.sales.void);
 
   const [confirmingVoid, setConfirmingVoid] = useState(false);
@@ -29,6 +31,20 @@ export default function VentaDetalle() {
   const [submitting, setSubmitting] = useState(false);
 
   if (!session || sale === undefined) return null;
+
+  // Solo llega aquí sin `?id=` en la URL; un id inexistente lo rechaza el
+  // propio sales.getById.
+  if (sale === null) {
+    return (
+      <div className="top-bar">
+        <div className="top-bar__back">
+          <IconButton icon="arrow-left" outline label="Volver" onClick={() => router.push("/ventas")} />
+          <p className="top-bar__title" style={{ fontSize: 18 }}>Venta no encontrada</p>
+        </div>
+      </div>
+    );
+  }
+
   const isAdmin = session.role === "administrador";
 
   async function handleVoid(e) {

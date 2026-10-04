@@ -1,5 +1,5 @@
 // Pantalla 7 — Registrar interacción. Recreación de
-// src/app/(app)/prospectos/[id]/interaccion/page.js.
+// src/app/(app)/prospectos/interaccion/page.js.
 const CONTACT_TYPES = [
   { value: 'whatsapp', label: 'WhatsApp', icon: 'message-circle' },
   { value: 'llamada', label: 'Llamada', icon: 'phone' },

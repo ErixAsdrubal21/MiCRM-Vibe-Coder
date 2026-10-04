@@ -11,6 +11,7 @@ import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Icon } from "@/design/components/core/Icon.jsx";
 import { useSession } from "@/lib/session.js";
 import { contactTypeLabel, CONTACT_ICON } from "@/lib/prospects.js";
+import { prospectoHref } from "@/lib/routes.js";
 
 export default function TareasDelDia() {
   const session = useSession();
@@ -55,7 +56,7 @@ export default function TareasDelDia() {
       )}
 
       {todos.map(({ prospect, nextFollowUp, daysSinceContact, atRisk }) => (
-        <div className="list-row" key={prospect._id} onClick={() => router.push(`/prospectos/${prospect._id}`)} style={{ cursor: "pointer" }}>
+        <div className="list-row" key={prospect._id} onClick={() => router.push(prospectoHref(prospect._id))} style={{ cursor: "pointer" }}>
           <div>
             <p className="list-row__title">{prospect.name}</p>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>

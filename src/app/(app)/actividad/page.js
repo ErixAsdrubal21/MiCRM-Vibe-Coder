@@ -19,6 +19,7 @@ import {
   RESOLUTION_LABELS,
 } from "../../../../shared/crmEnums.js";
 import "./actividad.css";
+import { prospectoHref } from "@/lib/routes.js";
 
 /**
  * ICS-88 — pantalla global /actividad: dos vistas sobre backend ya listo
@@ -338,7 +339,7 @@ export default function Actividad() {
         ) : view === "interacciones" ? (
           <>
             {feed.results.map((i) => (
-              <button key={i._id} className="feed-row" onClick={() => router.push(`/prospectos/${i.prospectId}`)}>
+              <button key={i._id} className="feed-row" onClick={() => router.push(prospectoHref(i.prospectId))}>
                 <div className="feed-row__head">
                   <span className="list-row__title">{i.prospectName ?? "Prospecto"}</span>
                   {i.stage && <Badge stage={i.stage} />}
@@ -360,7 +361,7 @@ export default function Actividad() {
         ) : (
           <>
             {followUps.results.map((f) => (
-              <button key={f._id} className="feed-row" onClick={() => router.push(`/prospectos/${f.prospectId}`)}>
+              <button key={f._id} className="feed-row" onClick={() => router.push(prospectoHref(f.prospectId))}>
                 <div className="feed-row__head">
                   <span className="list-row__title">{f.prospectName ?? "Prospecto"}</span>
                   {f.status === "completado" ? (

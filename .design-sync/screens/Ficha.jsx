@@ -1,5 +1,5 @@
 // Pantalla 5 — Ficha del prospecto/cliente. Recreación de
-// src/app/(app)/prospectos/[id]/page.js en su versión ICS-86 (línea de
+// src/app/(app)/prospectos/ficha/page.js en su versión ICS-86 (línea de
 // tiempo unificada + editar/borrar + cerrar/reprogramar) — el diseño
 // objetivo, aunque esa rama no esté mergeada todavía.
 const CONTACT_ICON = { llamada: 'phone', whatsapp: 'message-circle', visita: 'map-pin', email: 'mail', otro: 'circle' };

@@ -10,6 +10,7 @@ import { Button } from "@/design/components/core/Button.jsx";
 import { Badge } from "@/design/components/core/Badge.jsx";
 import { useSession, homePathForRole } from "@/lib/session.js";
 import { todayISO } from "@/lib/dates.js";
+import { prospectoHref } from "@/lib/routes.js";
 
 const STAGE_CHIPS = [
   { value: "calificacion", label: "Calificación" },
@@ -72,7 +73,7 @@ export default function NuevaOportunidad() {
         stage,
         expectedCloseDate: expectedCloseDate || undefined,
       });
-      router.replace(`/prospectos/${selected._id}`);
+      router.replace(prospectoHref(selected._id));
     } catch (err) {
       setError(err.message ?? "No se pudo crear la oportunidad.");
       setSubmitting(false);
