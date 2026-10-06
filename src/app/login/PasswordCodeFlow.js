@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAction, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../../convex/_generated/api";
 import { Button } from "@/design/components/core/Button.jsx";
@@ -12,12 +12,14 @@ const ERROR_STYLE = { fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--
 const MIN_PASSWORD = 8; // mismo rango que valida convex/passwordReset.js
 const MAX_PASSWORD = 128;
 const CODE_ERROR = "El código es incorrecto o ya venció. Pide uno nuevo.";
+const SERVER_ERROR = "No se pudo cambiar la contraseña. Tu código sigue siendo válido; intenta de nuevo.";
 
 /**
  * ICS-111 — recuperar la contraseña con un código enviado al correo, en tres
  * pantallas: (1) correo, (2) código, (3) contraseña nueva. El código no se
  * valida ni abre sesión en la pantalla 2: se comprueba junto con la
- * contraseña nueva en `passwordReset.confirm` (pantalla 3). Después se inicia
+ * contraseña nueva en `passwordReset.confirm` (pantalla 3), que aplica todo en
+ * una sola transacción. Después se inicia
  * sesión con la contraseña nueva por el login normal.
  *
  * La pantalla 1 responde igual exista o no el correo; el servidor también
@@ -27,7 +29,7 @@ export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
   const router = useRouter();
   const { signIn } = useAuthActions();
   const requestCode = useMutation(api.passwordReset.request);
-  const confirmReset = useAction(api.passwordReset.confirm);
+  const confirmReset = useMutation(api.passwordReset.confirm);
 
   const [step, setStep] = useState("email");
   const [email, setEmail] = useState(initialEmail);
@@ -66,17 +68,25 @@ export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
     }
     if (password !== confirm) return setError("Las contraseñas no coinciden.");
     setSubmitting(true);
-    let loginEmail;
+    let result;
     try {
-      ({ loginEmail } = await confirmReset({ email, code: code.trim(), newPassword: password }));
+      result = await confirmReset({ email, code: code.trim(), newPassword: password });
     } catch {
+      // Falla del servidor o de red: la transacción no se aplicó, el código sigue vigente.
       setSubmitting(false);
+      setError(SERVER_ERROR);
+      return;
+    }
+    if (!result.ok) {
+      setSubmitting(false);
+      if (result.reason === "INVALID_PASSWORD") return setError(`La contraseña debe tener entre ${MIN_PASSWORD} y ${MAX_PASSWORD} caracteres.`);
       setPassword("");
       setConfirm("");
       setError(CODE_ERROR);
       setStep("code");
       return;
     }
+    const { loginEmail } = result;
     try {
       await signIn("password", { email: loginEmail, password, flow: "signIn" });
       router.replace("/");

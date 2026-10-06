@@ -350,3 +350,22 @@ export const dumpSmokeReset = internalQuery({
     };
   },
 });
+
+/**
+ * ICS-111 — siembra solicitudes de recuperación con antigüedad dada (ms hacia
+ * atrás) para un correo de prueba, y así probar el límite por hora sin
+ * esperar una hora real.
+ */
+export const seedSmokeResetRequests = internalMutation({
+  args: { email: v.string(), agesMs: v.array(v.number()) },
+  handler: async (ctx, { email, agesMs }) => {
+    requireSmokeAuthEmail(email);
+    const normalized = email.trim().toLowerCase();
+    for (const row of await ctx.db.query("passwordResetRequests").withIndex("by_email_and_time", (q) => q.eq("email", normalized)).collect()) {
+      await ctx.db.delete(row._id);
+    }
+    const now = Date.now();
+    for (const age of agesMs) await ctx.db.insert("passwordResetRequests", { email: normalized, requestedAt: now - age });
+    return agesMs.length;
+  },
+});

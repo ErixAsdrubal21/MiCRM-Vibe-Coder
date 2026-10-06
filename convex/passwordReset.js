@@ -1,7 +1,7 @@
-import { action, internalAction, internalMutation, mutation } from "./_generated/server";
+import { internalAction, internalMutation, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { invalidateSessions, modifyAccountCredentials } from "@convex-dev/auth/server";
+import { Scrypt } from "lucia";
 import { findUsersByEmailInsensitive } from "./lib.js";
 import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from "./email.js";
 
@@ -11,9 +11,10 @@ import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from
  * Implementación propia en vez del flujo `reset` de Convex Auth, porque ese
  * flujo (a) responde distinto si la cuenta existe o no, (b) guarda el código
  * nuevo antes de que se pueda aplicar un límite de envíos y (c) queda expuesto
- * como ruta pública de `auth:signIn`. De Convex Auth solo se usan
- * `modifyAccountCredentials` e `invalidateSessions`, las mismas que ya usan el
- * cambio y el restablecimiento de contraseña existentes (convex/users.js).
+ * como ruta pública de `auth:signIn`. El cambio de contraseña escribe directo
+ * en las tablas de Convex Auth (`authAccounts`, `authSessions`,
+ * `authRefreshTokens`) con el mismo hash que usa su proveedor `Password`, para
+ * poder hacerlo en una sola transacción con la revocación de sesiones.
  *
  * 1. `request(email)` — responde siempre igual y de inmediato; el trabajo se
  *    agenda (`processRequest`), así que ni la respuesta ni su tiempo revelan
@@ -22,10 +23,10 @@ import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from
  *    y, solo si hay cupo y cuenta, reemplaza el código. Una solicitud
  *    bloqueada no toca el código vigente; las transacciones de Convex son
  *    serializables, así que solicitudes simultáneas no se saltan el límite.
- * 3. `confirm(email, code, newPassword)` — valida el código (hash, vigencia,
- *    intentos, un solo uso), cambia la contraseña y cierra todas las sesiones.
- *    Cualquier fallo da el mismo error. El aviso de cambio se agenda después
- *    del cambio confirmado; si el correo falla, el cambio ya quedó hecho.
+ * 3. `confirm(email, code, newPassword)` — una sola transacción: valida el
+ *    código (hash, vigencia, 5 intentos, un solo uso), cambia la contraseña,
+ *    cierra todas las sesiones y agenda el aviso. Todo o nada. Cualquier
+ *    código inválido da la misma respuesta, exista o no la cuenta.
  */
 
 const CODE_MINUTES = 15;
@@ -35,7 +36,6 @@ const MAX_REQUESTS_PER_HOUR = 5;
 const MAX_ATTEMPTS_PER_CODE = 5;
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 128;
-const CODE_ERROR = "El código es incorrecto o ya venció. Pide uno nuevo.";
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
 
@@ -121,53 +121,77 @@ export const reserveCode = internalMutation({
   },
 });
 
-/** Paso 3 (público): código + contraseña nueva. Devuelve el correo de inicio de sesión para entrar después. */
-export const confirm = action({
+/**
+ * Paso 3 (público): código + contraseña nueva, en UNA sola transacción:
+ * valida el código, guarda la contraseña nueva (mismo hash que Convex Auth:
+ * Scrypt de `lucia`), borra todas las sesiones y sus refresh tokens, consume
+ * el código y agenda el aviso. Si algo falla a medio camino, Convex revierte
+ * todo: el código sigue sirviendo y nada cambia. Por eso un código incorrecto
+ * se responde con `{ ok: false }` en vez de lanzar error — así sí se guarda
+ * el intento fallido.
+ */
+export const confirm = mutation({
   args: { email: v.string(), code: v.string(), newPassword: v.string() },
   handler: async (ctx, { email, code, newPassword }) => {
     if (newPassword.length < MIN_PASSWORD || newPassword.length > MAX_PASSWORD) {
-      throw new Error(`La contraseña debe tener entre ${MIN_PASSWORD} y ${MAX_PASSWORD} caracteres.`);
+      return { ok: false, reason: "INVALID_PASSWORD" };
     }
     const normalized = normalizeEmail(email);
-    const result = await ctx.runMutation(internal.passwordReset.consumeCode, {
-      email: normalized,
-      codeHash: await hashCode(normalized, code.trim()),
-    });
-    if (!result) throw new Error(CODE_ERROR);
-
-    await modifyAccountCredentials(ctx, { provider: "password", account: { id: result.loginEmail, secret: newPassword } });
-    await invalidateSessions(ctx, { userId: result.userId });
-    await ctx.scheduler.runAfter(0, internal.passwordReset.sendChangedNotice, { to: result.notifyEmail });
-    return { loginEmail: result.loginEmail };
-  },
-});
-
-export const consumeCode = internalMutation({
-  args: { email: v.string(), codeHash: v.string() },
-  handler: async (ctx, { email, codeHash }) => {
     const row = await ctx.db
       .query("passwordResetCodes")
-      .withIndex("by_email", (q) => q.eq("email", email))
+      .withIndex("by_email", (q) => q.eq("email", normalized))
       .first();
-    if (!row) return null;
+    if (!row) return { ok: false, reason: "INVALID_CODE" };
     if (row.expiresAt <= Date.now() || row.attempts >= MAX_ATTEMPTS_PER_CODE) {
       await ctx.db.delete(row._id);
-      return null;
+      return { ok: false, reason: "INVALID_CODE" };
     }
-    if (row.codeHash !== codeHash) {
+    if (row.codeHash !== (await hashCode(normalized, code.trim()))) {
       const attempts = row.attempts + 1;
       if (attempts >= MAX_ATTEMPTS_PER_CODE) await ctx.db.delete(row._id);
       else await ctx.db.patch(row._id, { attempts });
-      return null;
+      return { ok: false, reason: "INVALID_CODE" };
     }
-    await ctx.db.delete(row._id); // un solo uso
 
     const user = await ctx.db.get(row.userId);
     const account = user ? await passwordAccount(ctx.db, user._id) : null;
-    if (!user || !account) return null;
-    return { userId: user._id, loginEmail: account.providerAccountId, notifyEmail: user.email };
+    if (!user || !account) {
+      await ctx.db.delete(row._id);
+      return { ok: false, reason: "INVALID_CODE" };
+    }
+
+    await ctx.db.patch(account._id, { secret: await new Scrypt().hash(newPassword) });
+    failpoint("after_password_change");
+    const sessions = await ctx.db
+      .query("authSessions")
+      .withIndex("userId", (q) => q.eq("userId", user._id))
+      .collect();
+    for (const session of sessions) {
+      const tokens = await ctx.db
+        .query("authRefreshTokens")
+        .withIndex("sessionId", (q) => q.eq("sessionId", session._id))
+        .collect();
+      for (const token of tokens) await ctx.db.delete(token._id);
+      await ctx.db.delete(session._id);
+    }
+    failpoint("after_sessions_revoked");
+    await ctx.db.delete(row._id); // un solo uso
+    // El aviso solo se agenda si la transacción se confirma; si el correo falla después, el cambio ya quedó hecho.
+    await ctx.scheduler.runAfter(0, internal.passwordReset.sendChangedNotice, { to: user.email });
+    return { ok: true, loginEmail: account.providerAccountId };
   },
 });
+
+/**
+ * Punto de falla para pruebas: si `PASSWORD_RESET_FAILPOINT` (entorno de
+ * Convex) coincide, lanza error a media transacción para comprobar que
+ * Convex revierte todo. Nunca se define en producción.
+ */
+function failpoint(name) {
+  if (process.env.PASSWORD_RESET_FAILPOINT === name) {
+    throw new Error(`Falla simulada (${name}).`);
+  }
+}
 
 export const sendChangedNotice = internalAction({
   args: { to: v.string() },
