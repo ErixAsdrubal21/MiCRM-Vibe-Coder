@@ -167,4 +167,22 @@ export default defineSchema({
     // ICS-99 — requerido por "oportunidad-ganada"/"oportunidad-perdida".
     opportunityId: v.optional(v.id("opportunities")),
   }).index("by_prospect_and_at", ["prospectId", "at"]),
+
+  // ICS-111 — recuperación de contraseña (ver convex/passwordReset.js).
+  // Cada solicitud reserva cupo aquí, exista o no la cuenta, para limitar
+  // envíos por correo. Solo se conserva la última hora.
+  passwordResetRequests: defineTable({
+    email: v.string(), // normalizado: trim + minúsculas
+    requestedAt: v.number(),
+  }).index("by_email_and_time", ["email", "requestedAt"]),
+
+  // Código vigente por correo: solo el hash, nunca el código. Uno nuevo
+  // reemplaza al anterior; se borra al usarse, al vencer o al agotar intentos.
+  passwordResetCodes: defineTable({
+    email: v.string(), // normalizado
+    userId: v.id("users"),
+    codeHash: v.string(),
+    expiresAt: v.number(),
+    attempts: v.number(),
+  }).index("by_email", ["email"]),
 });

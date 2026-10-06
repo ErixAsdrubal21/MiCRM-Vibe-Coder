@@ -1,4 +1,4 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
 
 /**
  * Seguridad real (ICS-6/7/8): la identidad se deriva del servidor con
@@ -7,8 +7,24 @@ import { getAuthUserId } from "@convex-dev/auth/server";
  * una de estas tres, no lee `ctx.db` directo sin pasar por aquí.
  */
 
-export async function requireAuthenticatedUser(ctx) {
+/**
+ * ICS-111 — usuario del token solo si su sesión sigue viva. `getAuthUserId`
+ * lee el JWT sin consultar la base, así que un token ya emitido seguiría
+ * valiendo (hasta su vencimiento) aunque `invalidateSessions` haya borrado la
+ * sesión al cambiar o restablecer la contraseña. Al leer `authSessions`, las
+ * queries suscritas también se re-evalúan en cuanto la sesión se borra.
+ */
+export async function getActiveUserId(ctx) {
   const userId = await getAuthUserId(ctx);
+  const sessionId = await getAuthSessionId(ctx);
+  if (!userId || !sessionId) return null;
+  const session = await ctx.db.get(sessionId);
+  if (!session || session.userId !== userId || session.expirationTime <= Date.now()) return null;
+  return userId;
+}
+
+export async function requireAuthenticatedUser(ctx) {
+  const userId = await getActiveUserId(ctx);
   if (!userId) throw new Error("No autenticado.");
   const user = await ctx.db.get(userId);
   if (!user) throw new Error("Usuario no encontrado.");
