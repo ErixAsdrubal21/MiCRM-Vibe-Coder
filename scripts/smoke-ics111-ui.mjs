@@ -103,7 +103,7 @@ try {
   setFailpoint("after_password_change");
   await sleep(2000);
   await set(p, "#pc-pass", NEW_PASS); await set(p, "#pc-confirm", NEW_PASS); await submit(p);
-  await waitText(p, "Tu código sigue siendo válido");
+  await waitText(p, "No pudimos confirmar el resultado");
   check("Falla del servidor: no dice 'código incorrecto' y se queda en la pantalla 3", (await has(p, "Crea tu contraseña nueva")) && !(await has(p, "El código es incorrecto")));
   setFailpoint(null);
   await sleep(2000);

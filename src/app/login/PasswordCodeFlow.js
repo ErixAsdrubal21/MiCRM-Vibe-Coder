@@ -12,7 +12,7 @@ const ERROR_STYLE = { fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--
 const MIN_PASSWORD = 8; // mismo rango que valida convex/passwordReset.js
 const MAX_PASSWORD = 128;
 const CODE_ERROR = "El código es incorrecto o ya venció. Pide uno nuevo.";
-const SERVER_ERROR = "No se pudo cambiar la contraseña. Tu código sigue siendo válido; intenta de nuevo.";
+const SERVER_ERROR = "No pudimos confirmar el resultado. Intenta iniciar sesión con tu contraseña nueva; si no funciona, vuelve a intentar el cambio.";
 
 /**
  * ICS-111 — recuperar la contraseña con un código enviado al correo, en tres
@@ -72,7 +72,7 @@ export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
     try {
       result = await confirmReset({ email, code: code.trim(), newPassword: password });
     } catch {
-      // Falla del servidor o de red: la transacción no se aplicó, el código sigue vigente.
+      // Falla del servidor o de red: no se sabe si el cambio se aplicó (la respuesta pudo perderse).
       setSubmitting(false);
       setError(SERVER_ERROR);
       return;
