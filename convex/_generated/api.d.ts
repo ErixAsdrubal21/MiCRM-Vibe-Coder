@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as email from "../email.js";
 import type * as followUps from "../followUps.js";
 import type * as http from "../http.js";
 import type * as interactions from "../interactions.js";
@@ -17,6 +18,7 @@ import type * as metrics from "../metrics.js";
 import type * as migrations from "../migrations.js";
 import type * as opportunities from "../opportunities.js";
 import type * as pagination from "../pagination.js";
+import type * as passwordReset from "../passwordReset.js";
 import type * as permissions from "../permissions.js";
 import type * as prospects from "../prospects.js";
 import type * as sales from "../sales.js";
@@ -34,6 +36,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  email: typeof email;
   followUps: typeof followUps;
   http: typeof http;
   interactions: typeof interactions;
@@ -42,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   opportunities: typeof opportunities;
   pagination: typeof pagination;
+  passwordReset: typeof passwordReset;
   permissions: typeof permissions;
   prospects: typeof prospects;
   sales: typeof sales;

@@ -232,8 +232,18 @@ export const provisionDemoAdmin = internalMutation({
 /** ICS-108: los helpers de abajo solo tocan correos de prueba con este prefijo. */
 const SMOKE_AUTH_PREFIX = "smoke-ics108";
 
+/**
+ * También acepta las direcciones de prueba de Resend (`…@resend.dev`): la
+ * recuperación de contraseña (ICS-111) solo manda códigos a correos que sí
+ * pueden recibir, y Resend las acepta sin entregar nada real.
+ */
+const isSmokeAuthEmail = (email) => {
+  const e = email?.toLowerCase() ?? "";
+  return e.startsWith(SMOKE_AUTH_PREFIX) || e.endsWith("@resend.dev");
+};
+
 function requireSmokeAuthEmail(email) {
-  if (!email.toLowerCase().startsWith(SMOKE_AUTH_PREFIX)) {
+  if (!isSmokeAuthEmail(email)) {
     throw new Error(`Rechazado: "${email}" no es un correo de prueba (${SMOKE_AUTH_PREFIX}…).`);
   }
 }
@@ -258,7 +268,7 @@ export const dumpSmokeAuth = internalQuery({
   args: {},
   handler: async (ctx) => {
     const users = (await ctx.db.query("users").collect()).filter((u) =>
-      u.email?.toLowerCase().startsWith(SMOKE_AUTH_PREFIX),
+      isSmokeAuthEmail(u.email),
     );
     const out = [];
     for (const u of users) {
@@ -281,7 +291,7 @@ export const deleteSmokeAuthUsers = internalMutation({
   args: {},
   handler: async (ctx) => {
     const users = (await ctx.db.query("users").collect()).filter((u) =>
-      u.email?.toLowerCase().startsWith(SMOKE_AUTH_PREFIX),
+      isSmokeAuthEmail(u.email),
     );
     for (const u of users) {
       const accounts = await ctx.db.query("authAccounts").withIndex("userIdAndProvider", (q) => q.eq("userId", u._id)).collect();
@@ -298,6 +308,64 @@ export const deleteSmokeAuthUsers = internalMutation({
       }
       await ctx.db.delete(u._id);
     }
+    for (const table of ["passwordResetCodes", "passwordResetRequests"]) {
+      for (const row of await ctx.db.query(table).collect()) {
+        if (isSmokeAuthEmail(row.email)) await ctx.db.delete(row._id);
+      }
+    }
     return { deleted: users.length };
+  },
+});
+
+/**
+ * ICS-111 — fija un código de recuperación conocido (por su hash) para un
+ * correo de prueba, sin pasar por el correo. Permite probar el éxito, el
+ * vencimiento, la reutilización y el límite de intentos sin leer una bandeja.
+ */
+export const setSmokeResetCode = internalMutation({
+  args: { email: v.string(), codeHash: v.string(), expiresAt: v.number() },
+  handler: async (ctx, { email, codeHash, expiresAt }) => {
+    requireSmokeAuthEmail(email);
+    const normalized = email.trim().toLowerCase();
+    const user = (await ctx.db.query("users").collect()).find((u) => u.email?.toLowerCase() === normalized);
+    if (!user) throw new Error(`No existe usuario de prueba ${email}.`);
+    for (const row of await ctx.db.query("passwordResetCodes").withIndex("by_email", (q) => q.eq("email", normalized)).collect()) {
+      await ctx.db.delete(row._id);
+    }
+    return ctx.db.insert("passwordResetCodes", { email: normalized, userId: user._id, codeHash, expiresAt, attempts: 0 });
+  },
+});
+
+/** ICS-111 — estado de recuperación de un correo de prueba: códigos vigentes y solicitudes registradas. */
+export const dumpSmokeReset = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    requireSmokeAuthEmail(email);
+    const normalized = email.trim().toLowerCase();
+    const codes = await ctx.db.query("passwordResetCodes").withIndex("by_email", (q) => q.eq("email", normalized)).collect();
+    const requests = await ctx.db.query("passwordResetRequests").withIndex("by_email_and_time", (q) => q.eq("email", normalized)).collect();
+    return {
+      codes: codes.map((c) => ({ _id: c._id, codeHash: c.codeHash, attempts: c.attempts, expiresAt: c.expiresAt })),
+      requests: requests.length,
+    };
+  },
+});
+
+/**
+ * ICS-111 — siembra solicitudes de recuperación con antigüedad dada (ms hacia
+ * atrás) para un correo de prueba, y así probar el límite por hora sin
+ * esperar una hora real.
+ */
+export const seedSmokeResetRequests = internalMutation({
+  args: { email: v.string(), agesMs: v.array(v.number()) },
+  handler: async (ctx, { email, agesMs }) => {
+    requireSmokeAuthEmail(email);
+    const normalized = email.trim().toLowerCase();
+    for (const row of await ctx.db.query("passwordResetRequests").withIndex("by_email_and_time", (q) => q.eq("email", normalized)).collect()) {
+      await ctx.db.delete(row._id);
+    }
+    const now = Date.now();
+    for (const age of agesMs) await ctx.db.insert("passwordResetRequests", { email: normalized, requestedAt: now - age });
+    return agesMs.length;
   },
 });

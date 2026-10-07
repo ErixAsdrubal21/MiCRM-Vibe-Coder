@@ -3,24 +3,26 @@ import { v } from "convex/values";
 import {
   createAccount,
   getAuthSessionId,
-  getAuthUserId,
   invalidateSessions,
   modifyAccountCredentials,
   retrieveAccount,
 } from "@convex-dev/auth/server";
 import { api, internal } from "./_generated/api";
-import { requireAdministrador } from "./permissions";
+import { getActiveUserId, requireAdministrador } from "./permissions";
 import { findUsersByEmailInsensitive } from "./lib.js";
 import { role } from "./validators.js";
 
 /**
  * ICS-6/7/8 — reemplaza loginMock. Sesión real vía Convex Auth: el cliente
- * ya no manda quién es, `getAuthUserId(ctx)` lo deriva del token de sesión.
+ * ya no manda quién es, se deriva del token de sesión. ICS-111: solo si la
+ * sesión sigue viva (`getActiveUserId`), así que una sesión cerrada por un
+ * cambio de contraseña deja de ver datos de inmediato, también en las
+ * actions que se apoyan en esta query.
  */
 export const currentUser = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getActiveUserId(ctx);
     return userId ? ctx.db.get(userId) : null;
   },
 });

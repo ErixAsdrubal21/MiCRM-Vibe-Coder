@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { Button } from "@/design/components/core/Button.jsx";
+import PasswordCodeFlow from "./PasswordCodeFlow.js";
 import "./login.css";
 
 // Google regresa aquí (no a "/") para poder avisar si la cuenta fue rechazada:
@@ -31,7 +32,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
-  const [showForgotHelp, setShowForgotHelp] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [notice, setNotice] = useState("");
 
   const backFromGoogle = useSyncExternalStore(subscribeNever, readBackFromGoogle, () => false);
   const googleRejected = backFromGoogle && !isLoading && !isAuthenticated;
@@ -64,10 +66,27 @@ export default function Login() {
     }
   }
 
+  // ICS-111: recuperar la contraseña con un código por correo.
+  if (resetOpen) {
+    return (
+      <div className="login-screen">
+        <p className="wordmark">Mi Negocio<span>CRM</span></p>
+        <PasswordCodeFlow
+          initialEmail={email}
+          onCancel={(result) => {
+            setResetOpen(false);
+            setNotice(result?.message ?? "");
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="login-screen">
       <p className="wordmark">Mi Negocio<span>CRM</span></p>
       <p className="login-tag">Organiza a tus clientes sin complicarte</p>
+      {notice && <p className="forgot-help">{notice}</p>}
 
       <form className="login-form" onSubmit={handleSubmit}>
         <div className="field-group">
@@ -121,16 +140,10 @@ export default function Login() {
         {googleSubmitting ? "Conectando..." : "Continuar con Google"}
       </Button>
 
-      {showForgotHelp ? (
-        <p className="forgot-help">
-          Pide a tu administrador que te restablezca la contraseña desde Configuración » Equipo — te dará una
-          temporal para entrar y luego la cambias tú desde tu cuenta.
-        </p>
-      ) : (
-        <button type="button" className="forgot" onClick={() => setShowForgotHelp(true)}>
-          Olvidé mi contraseña
-        </button>
-      )}
+      {/* ICS-111: autoservicio por correo; el restablecimiento por la administradora (ICS-6) sigue como respaldo. */}
+      <button type="button" className="forgot" onClick={() => { setNotice(""); setResetOpen(true); }}>
+        Olvidé mi contraseña
+      </button>
     </div>
   );
 }
