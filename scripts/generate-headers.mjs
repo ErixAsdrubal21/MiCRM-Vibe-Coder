@@ -15,14 +15,14 @@
 // Cloudflare junta sus cabeceras; por eso la CSP va solo en las reglas por
 // ruta y nunca en `/*` (dos CSP se aplican las dos y se bloquearían entre sí).
 //
-// CSP_MODE: "report-only" (etapa A de ICS-115: solo avisa en la consola) o
-// "enforce" (etapa B: bloquea).
+// CSP_MODE: "enforce" (por defecto, bloquea) o "report-only" (solo avisa en la
+// consola; útil para probar un cambio grande de la política en un Preview).
 
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const CSP_MODE = process.env.CSP_MODE ?? "report-only";
+const CSP_MODE = process.env.CSP_MODE ?? "enforce";
 const OUT = path.resolve("out");
 const MAX_RULES = 100;
 const MAX_LINE = 2000;

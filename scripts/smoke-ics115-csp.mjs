@@ -6,10 +6,16 @@
 // la app dentro de un iframe de otro origen. Cualquier violación de CSP falla.
 //
 // USO
-//   CSP_MODE=enforce npm run build                 # out/ con la CSP aplicada y la URL de dev
+//   npm run build                                  # out/ con la CSP aplicada y la URL de dev
 //   npm install --no-save puppeteer-core@25        # no es dependencia del proyecto
 //   CHROME_PATH="/ruta/a/Google Chrome" node scripts/smoke-ics115-csp.mjs
 //   (sin CHROME_PATH usa "/Applications/Google Chrome 2.app/…", el Chrome de esta Mac)
+//
+//   Contra un Preview de Cloudflare (que use Convex de desarrollo), en vez del
+//   servidor local: BASE_URL=https://<rama>.micrm-vibe-coder.pages.dev node scripts/smoke-ics115-csp.mjs
+//   Lee las cabeceras reales de Cloudflare y acepta Report-Only o aplicada: en
+//   Report-Only el navegador también reporta cada violación, así que la prueba
+//   falla igual. Las rutas salen de out/_headers (cualquier build local sirve).
 //
 // DATOS
 //   Cuenta delivered+ics115@resend.dev (administrador, para ver todas las
@@ -24,14 +30,15 @@ import puppeteer from "puppeteer-core";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) throw new Error("Solo contra el deployment de desarrollo.");
-if (!existsSync("out/_headers")) throw new Error("Falta out/_headers: corre `CSP_MODE=enforce npm run build` primero.");
+const REMOTE = process.env.BASE_URL?.replace(/\/$/, "");
+if (!existsSync("out/_headers")) throw new Error("Falta out/_headers: corre `npm run build` primero.");
 const HEADERS_FILE = readFileSync("out/_headers", "utf8");
-if (!/^\s+Content-Security-Policy:/m.test(HEADERS_FILE)) throw new Error("out/ no tiene la CSP aplicada: corre `CSP_MODE=enforce npm run build`.");
+if (!REMOTE && !/^\s+Content-Security-Policy:/m.test(HEADERS_FILE)) throw new Error("out/ no tiene la CSP aplicada: corre `npm run build` (sin CSP_MODE=report-only).");
 
 const CHROME = process.env.CHROME_PATH ?? "/Applications/Google Chrome 2.app/Contents/MacOS/Google Chrome";
 const PORT = 4399;
 const EVIL_PORT = 4398;
-const BASE = `http://localhost:${PORT}`;
+const BASE = REMOTE ?? `http://localhost:${PORT}`;
 const EMAIL = "delivered+ics115@resend.dev";
 const PASS = randomBytes(12).toString("base64url");
 
@@ -74,7 +81,7 @@ const evil = http.createServer((_req, res) => {
   res.writeHead(200, { "content-type": "text/html" });
   res.end(`<!doctype html><iframe id="f" src="${BASE}/login" width="400" height="400"></iframe>`);
 });
-await new Promise((r) => server.listen(PORT, r));
+if (!REMOTE) await new Promise((r) => server.listen(PORT, r));
 await new Promise((r) => evil.listen(EVIL_PORT, r));
 
 let browser;
@@ -90,12 +97,36 @@ async function watch(p) {
   p.on("pageerror", (e) => errors.push(e.message));
 }
 
+/** Cabeceras que de verdad recibe el navegador en esa ruta. */
+async function served(route) {
+  if (!REMOTE) return headersFor(route);
+  const res = await fetch(`${BASE}${route}`, { redirect: "manual" });
+  return [...res.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]);
+}
+const cspOf = (hs) => hs.find(([k]) => /^content-security-policy(-report-only)?$/i.test(k));
+
 try {
-  check("La regla /* trae las cabeceras básicas", ["X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy", "Strict-Transport-Security", "Cross-Origin-Opener-Policy"].every((h) => headersFor("/x").some(([k]) => k === h)));
-  check("La CSP solo va en reglas por ruta, nunca en /*", !headersFor("/no-existe").some(([k]) => k.startsWith("Content-Security-Policy")));
-  check("Cada ruta tiene su CSP", routes.every((r) => headersFor(r).some(([k]) => k === "Content-Security-Policy")), `${routes.length} rutas`);
-  check("connect-src apunta solo al Convex de desarrollo", HEADERS_FILE.includes(new URL(DEV_URL).host) && !HEADERS_FILE.includes("perfect-crocodile-599"));
-  check("Sin 'unsafe-inline' en script-src", !/script-src[^;]*'unsafe-inline'/.test(HEADERS_FILE));
+  if (REMOTE) {
+    const BASIC = ["x-frame-options", "x-content-type-options", "referrer-policy", "permissions-policy", "strict-transport-security", "cross-origin-opener-policy"];
+    const missing = [];
+    let devOnly = true;
+    for (const route of routes) {
+      const hs = await served(route);
+      const csp = cspOf(hs);
+      for (const h of BASIC) if (!hs.some(([k]) => k === h)) missing.push(`${route} sin ${h}`);
+      if (!csp) missing.push(`${route} sin CSP`);
+      else if (!csp[1].includes(new URL(DEV_URL).host) || csp[1].includes("perfect-crocodile-599")) devOnly = false;
+    }
+    check(`Cloudflare sirve las cabeceras en las ${routes.length} rutas`, missing.length === 0, missing.slice(0, 5).join(" | "));
+    check("Este Preview usa el Convex de desarrollo", devOnly);
+    check("Modo de la CSP servida", true, cspOf(await served("/login"))?.[0]);
+  } else {
+    check("La regla /* trae las cabeceras básicas", ["X-Frame-Options", "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy", "Strict-Transport-Security", "Cross-Origin-Opener-Policy"].every((h) => headersFor("/x").some(([k]) => k === h)));
+    check("La CSP solo va en reglas por ruta, nunca en /*", !headersFor("/no-existe").some(([k]) => k.startsWith("Content-Security-Policy")));
+    check("Cada ruta tiene su CSP", routes.every((r) => headersFor(r).some(([k]) => k === "Content-Security-Policy")), `${routes.length} rutas`);
+    check("connect-src apunta solo al Convex de desarrollo", HEADERS_FILE.includes(new URL(DEV_URL).host) && !HEADERS_FILE.includes("perfect-crocodile-599"));
+    check("Sin 'unsafe-inline' en script-src", !/script-src[^;]*'unsafe-inline'/.test(HEADERS_FILE));
+  }
 
   run("testHelpers:deleteSmokeAuthUsers");
   run("testHelpers:insertSmokeAuthUser", { email: EMAIL, role: "administrador" });
@@ -110,7 +141,7 @@ try {
   await set(p, "#pass", PASS);
   await submit(p);
   await p.waitForFunction(() => location.pathname !== "/login", { timeout: 30000 });
-  check("Login con contraseña funciona con la CSP aplicada", true, await p.evaluate(() => location.pathname));
+  check("Login con contraseña funciona con la CSP", true, await p.evaluate(() => location.pathname));
   for (const route of routes.filter((r) => r !== "/login")) {
     await p.goto(`${BASE}${route}`, { waitUntil: "networkidle2" });
     await sleep(1500);
@@ -127,7 +158,7 @@ try {
   await waitText(p2, "Recupera tu contraseña");
   await submit(p2);
   await waitText(p2, "Escribe tu código");
-  check("Recuperación: pide el código con la CSP aplicada", true);
+  check("Recuperación: pide el código con la CSP", true);
 
   // 3. Google: el botón debe sacar al navegador hacia accounts.google.com.
   const p3 = await (await browser.createBrowserContext()).newPage();
@@ -153,7 +184,7 @@ try {
   if (violations.length) console.log("  Violaciones:", [...new Set(violations)].slice(0, 5).join(" | "));
 } finally {
   if (browser) await browser.close();
-  server.close();
+  if (!REMOTE) server.close();
   evil.close();
   console.log("Limpieza:", JSON.stringify(run("testHelpers:deleteSmokeAuthUsers")));
 }
