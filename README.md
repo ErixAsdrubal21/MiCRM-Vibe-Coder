@@ -9,7 +9,7 @@ CRM para pequeños negocios (ver PRD en Notion / proyecto `crm-mvp` en Linear, e
 - **Next.js 16** (App Router, JavaScript, sin Tailwind — el sistema de diseño usa CSS custom properties propias).
 - **Convex** como base de datos/backend (`convex/schema.js`).
 - **Design system**: portado de `~/Documents/VIBE CODER NEXT/Design/stitch_essential_crm_design_system` (tokens, componentes core) a `src/design/`. Es la misma fuente visual confirmada que usa `mi-crm`.
-- Deploy destino: **Railway** (frontend Next.js) + **Convex Cloud** (backend, deploy separado vía `npx convex deploy`).
+- Deploy: **Cloudflare Pages** (frontend como sitio estático, `https://crm.icsaab.com`) + **Convex Cloud** (backend). Ver la sección Deploy.
 
 ## Arrancar en local
 
@@ -28,7 +28,7 @@ npm run dev
 
 Abre http://localhost:3000 — con `convex dev` corriendo, la página de inicio muestra "Convex: conectado"; si `convex dev` no está corriendo (o no existe `.env.local` todavía), muestra "sin conectar" pero el resto de la app sigue funcionando igual.
 
-**Modo local vs. cuenta real:** `npx convex dev` arrancó en modo *anónimo* (`CONVEX_DEPLOYMENT=anonymous:anonymous-mi-crm-next`) — backend local en `127.0.0.1:3210`, sin login, ideal para desarrollar pantallas. Antes de desplegar a producción hace falta `npx convex login` (login real por navegador) y `npx convex deploy`, que genera un `NEXT_PUBLIC_CONVEX_URL` de nube distinto al local — ese es el que va en las variables de entorno de Railway.
+**Modo local vs. cuenta real:** `npx convex dev` arrancó en modo *anónimo* (`CONVEX_DEPLOYMENT=anonymous:anonymous-mi-crm-next`) — backend local en `127.0.0.1:3210`, sin login, ideal para desarrollar pantallas. Antes de desplegar a producción hace falta `npx convex login` (login real por navegador) y `npx convex deploy`, que genera un `NEXT_PUBLIC_CONVEX_URL` de nube distinto al local — en producción lo inyecta el build de Cloudflare Pages (ver Deploy).
 
 ## Estructura
 
@@ -70,9 +70,12 @@ Cada componente en `src/design/components/core/` lleva `"use client"` porque tod
 ## Deploy
 
 - **GitHub**: este repo vive en `github.com/ErixAsdrubal21/MiCRM-Vibe-Coder`, rama `main`.
-- **Railway**: detecta Next.js automáticamente (Nixpacks) — solo necesita las variables de entorno de `.env.example` configuradas en el proyecto de Railway (`NEXT_PUBLIC_CONVEX_URL`, `CONVEX_DEPLOYMENT`, apuntando al deployment de producción de Convex, no al de `convex dev`), conectado vía integración Git a este repo.
-- **Convex**: hoy corre en modo anónimo/local (`npx convex dev`, sin cuenta). Antes de desplegar hace falta `npx convex login` (login real por navegador, requiere intervención manual del usuario) + `npx convex deploy`, que genera el `NEXT_PUBLIC_CONVEX_URL` de producción — ese es el que va en Railway, no el de `convex dev`.
-- **Convex se despliega automático en cada build de Railway (ICS-96, 2026-09-23)**: `railway.json` fija el build command del servicio a `npx convex deploy --cmd 'npm run build'` — primero empuja las funciones/esquema nuevos a Convex prod y, **solo si eso tiene éxito**, corre `npm run build` con `NEXT_PUBLIC_CONVEX_URL`/`NEXT_PUBLIC_CONVEX_SITE_URL` inyectadas automáticamente por el propio comando (detección de framework de Convex — no hace falta pasarlas a mano). El secreto que lo autoriza es la variable `CONVEX_DEPLOY_KEY` del servicio en Railway (deploy key con scope de producción, generada con `npx convex deployment token create <nombre> --prod` — vive solo en Railway, nunca en el repo). Ya no hace falta correr `npx convex deploy -y` a mano después de cada merge que toque `convex/` — el riesgo de "Railway despliega el frontend antes que Convex" (nos pasó dos veces en este proyecto) queda resuelto de raíz. Las variables `NEXT_PUBLIC_CONVEX_URL`/`NEXT_PUBLIC_CONVEX_SITE_URL` puestas a mano en el servicio quedan como redundantes (el build ya no depende de ellas) — se pueden borrar cuando se quiera, sin prisa.
+- **Cloudflare Pages** (proyecto `micrm-vibe-coder`, ICS-109): `next.config.mjs` usa `output: "export"`, así que `npm run build` genera un sitio estático en `out/` (no hay servidor de Next.js; `npm start` no aplica). Producción = rama `main` en `https://crm.icsaab.com`; cada otra rama genera una vista previa en `<rama>.micrm-vibe-coder.pages.dev` contra el Convex de desarrollo.
+  - Build command: `if [ "$CF_PAGES_BRANCH" = "main" ]; then npx convex deploy --cmd 'npm run build'; else npm run build; fi` — en `main` primero publica funciones/esquema en Convex prod y, solo si eso tiene éxito, compila el frontend con `NEXT_PUBLIC_CONVEX_URL` inyectada. Salida: `out`.
+  - Variables: `NODE_VERSION=22`; Production `CONVEX_DEPLOY_KEY` (llave de despliegue de Convex prod, solo en Cloudflare, nunca en el repo); Preview `NEXT_PUBLIC_CONVEX_URL` del deployment de desarrollo.
+  - `npm run build` también genera `out/_headers` (ICS-115, `scripts/generate-headers.mjs`): cabeceras de seguridad y una CSP por ruta con los hashes de los scripts inline.
+- **Convex**: prod `perfect-crocodile-599`, dev `giddy-kiwi-388`. Se despliega solo con cada merge a `main` (ver arriba); no hace falta `npx convex deploy` a mano.
+- **Railway** fue el hosting del frontend hasta ICS-109; ya no se usa y sus servicios se retiran en ICS-114.
 
 ## Tests automatizados — decisión (ICS-90)
 

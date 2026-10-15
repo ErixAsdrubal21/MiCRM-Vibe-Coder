@@ -10,8 +10,7 @@
     "build": "next build && node scripts/generate-headers.mjs",
     "start": "next start",
     "lint": "eslint",
-    "convex:dev": "convex dev",
-    "railway:build": "convex deploy --cmd 'npm run build'"
+    "convex:dev": "convex dev"
   },
   "dependencies": {
     "@auth/core": "^0.41.1",
