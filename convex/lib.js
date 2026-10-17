@@ -237,3 +237,13 @@ export async function findUsersByEmailInsensitive(db, email) {
   const users = await db.query("users").collect();
   return users.filter((u) => u.email?.toLowerCase() === target);
 }
+
+/**
+ * Punto de falla para smoke tests: si `TEST_FAILPOINT` (entorno de Convex)
+ * coincide con `name`, lanza a media mutation para comprobar que Convex
+ * revierte todo. Nunca se define en producción. (ICS-111 usa su propia
+ * variable, `PASSWORD_RESET_FAILPOINT`.)
+ */
+export function failpoint(name) {
+  if (process.env.TEST_FAILPOINT === name) throw new Error(`Falla simulada (${name}).`);
+}

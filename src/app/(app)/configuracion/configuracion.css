@@ -48,6 +48,8 @@
 }
 .team-row__name { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--color-ink); margin: 0; }
 .team-row__role { font-family: var(--font-ui); font-size: 11.5px; color: var(--color-mute); margin: 1px 0 0; }
+.team-row__confirm { font-family: var(--font-ui); font-size: 11.5px; color: var(--color-ink); margin: 4px 0 0; max-width: 34ch; }
+.team-row--disabled .team-row__name { color: var(--color-mute); text-decoration: line-through; }
 
 /* Formularios expandibles inline (cambiar contraseña / invitar usuario) — mismo recibo visual que .id-card de la Ficha, local a esta pantalla. */
 .settings-card {

@@ -2,6 +2,7 @@ import { convexAuth } from "@convex-dev/auth/server";
 import Google from "@auth/core/providers/google";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { findUsersByEmailInsensitive } from "./lib.js";
+import { isActiveUser } from "./permissions.js";
 
 /**
  * ICS-108 — acceso con Google, solo para cuentas ya aprovisionadas.
@@ -54,6 +55,8 @@ const GoogleProvisionedOnly = Google({ profile: googleProfileOrReject });
  * El acceso abierto de un clic (provider "open-access", 2026-09-21) se quitó
  * en ICS-108: con él activo, restringir Google no protegía nada.
  */
+const DISABLED_MSG = "Esta cuenta está desactivada. Contacta a un administrador.";
+
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     Password({
@@ -68,12 +71,20 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   ],
   callbacks: {
     async createOrUpdateUser(ctx, { existingUserId, profile }) {
-      if (existingUserId) return existingUserId;
+      if (existingUserId) {
+        if (!isActiveUser(await ctx.db.get(existingUserId))) throw new Error(DISABLED_MSG);
+        return existingUserId;
+      }
 
       const matches = await findUsersByEmailInsensitive(ctx.db, profile.email);
-      if (matches.length === 1 && matches[0].role) return matches[0]._id;
+      if (matches.length === 1 && isActiveUser(matches[0])) return matches[0]._id;
 
       throw new Error("No existe una cuenta para este correo. Contacta a un administrador.");
+    },
+    // ICS-117 — el login con contraseña no pasa por `createOrUpdateUser`; este
+    // callback corre antes de crear CUALQUIER sesión, sea cual sea el proveedor.
+    async beforeSessionCreation(ctx, { userId }) {
+      if (!isActiveUser(await ctx.db.get(userId))) throw new Error(DISABLED_MSG);
     },
   },
 });

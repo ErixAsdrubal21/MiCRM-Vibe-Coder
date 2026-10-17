@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../../../convex/_generated/api";
 import TopBar from "@/nav/TopBar.js";
@@ -187,28 +187,45 @@ function TeamSection({ ownUserId, showInviteForm, setShowInviteForm }) {
 }
 
 /**
- * Fila de miembro del equipo + "restablecer contraseña" (hallazgo de
+ * Fila de miembro del equipo: "restablecer contraseña" (hallazgo de
  * auditoría PRD↔app, 2026-09-13 — ver `resetUserPassword` en convex/users.js
- * para el porqué de esta forma en vez de un correo de recuperación). No se
- * ofrece sobre la propia fila del admin — para uno mismo ya existe "Cambiar
- * contraseña" arriba, que sí exige la contraseña actual.
+ * para el porqué de esta forma en vez de un correo de recuperación) y
+ * desactivar/reactivar la cuenta (ICS-117). Nada de esto se ofrece sobre la
+ * propia fila del admin — para uno mismo ya existe "Cambiar contraseña"
+ * arriba, y nadie puede desactivarse a sí mismo.
  */
+const CONFIRM_LABEL = { reset: "Sí, restablecer", deactivate: "Sí, desactivar", reactivate: "Sí, reactivar" };
+const CONFIRM_QUESTION = {
+  reset: (name) => `¿Restablecer la contraseña de ${name}?`,
+  deactivate: (name) => `¿Desactivar a ${name}? Se cerrarán sus sesiones y no podrá entrar. Sus datos se conservan.`,
+  reactivate: (name) => `¿Reactivar a ${name}? Podrá volver a entrar con su contraseña.`,
+};
+
 function TeamMemberRow({ member, isSelf }) {
   const resetUserPassword = useAction(api.users.resetUserPassword);
-  const [confirming, setConfirming] = useState(false);
+  const deactivateUser = useMutation(api.users.deactivateUser);
+  const reactivateUser = useMutation(api.users.reactivateUser);
+  const [confirming, setConfirming] = useState(null); // null | "reset" | "deactivate" | "reactivate"
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [tempPassword, setTempPassword] = useState(null);
+  const disabled = Boolean(member.disabledAt);
 
   async function handleConfirm() {
     setBusy(true);
     setError("");
     try {
-      const result = await resetUserPassword({ userId: member._id });
-      setTempPassword(result.tempPassword);
-      setConfirming(false);
+      if (confirming === "reset") {
+        const result = await resetUserPassword({ userId: member._id });
+        setTempPassword(result.tempPassword);
+      } else if (confirming === "deactivate") {
+        await deactivateUser({ userId: member._id });
+      } else if (confirming === "reactivate") {
+        await reactivateUser({ userId: member._id });
+      }
+      setConfirming(null);
     } catch (err) {
-      setError(err.message ?? "No se pudo restablecer la contraseña.");
+      setError(err.message ?? "No se pudo completar la acción.");
     } finally {
       setBusy(false);
     }
@@ -228,20 +245,26 @@ function TeamMemberRow({ member, isSelf }) {
   }
 
   return (
-    <div className="team-row">
+    <div className={`team-row${disabled ? " team-row--disabled" : ""}`}>
       <div>
         <p className="team-row__name">{member.name}</p>
-        <p className="team-row__role">{ROLE_LABEL[member.role]}</p>
+        <p className="team-row__role">{ROLE_LABEL[member.role]}{disabled && " · Desactivada"}</p>
+        {confirming && <p className="team-row__confirm">{CONFIRM_QUESTION[confirming](member.name)}</p>}
         {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 11.5, color: "var(--color-critical)", margin: "2px 0 0" }}>{error}</p>}
       </div>
       {!isSelf && (
         confirming ? (
           <div style={{ display: "flex", gap: 6 }}>
-            <Button variant="secondary" disabled={busy} onClick={() => setConfirming(false)}>No</Button>
-            <Button variant="primary" disabled={busy} onClick={handleConfirm}>{busy ? "..." : "Sí, restablecer"}</Button>
+            <Button variant="secondary" disabled={busy} onClick={() => setConfirming(null)}>No</Button>
+            <Button variant="primary" disabled={busy} onClick={handleConfirm}>{busy ? "..." : CONFIRM_LABEL[confirming]}</Button>
           </div>
+        ) : disabled ? (
+          <IconButton icon="user-check" label={`Reactivar a ${member.name}`} onClick={() => setConfirming("reactivate")} />
         ) : (
-          <IconButton icon="key-round" label={`Restablecer contraseña de ${member.name}`} onClick={() => setConfirming(true)} />
+          <div style={{ display: "flex", gap: 4 }}>
+            <IconButton icon="key-round" label={`Restablecer contraseña de ${member.name}`} onClick={() => setConfirming("reset")} />
+            <IconButton icon="user-x" label={`Desactivar a ${member.name}`} onClick={() => setConfirming("deactivate")} />
+          </div>
         )
       )}
     </div>

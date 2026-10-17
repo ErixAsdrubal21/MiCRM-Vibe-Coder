@@ -1,4 +1,4 @@
-import { action, internalAction, internalMutation, internalQuery, query } from "./_generated/server";
+import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
   createAccount,
@@ -8,8 +8,8 @@ import {
   retrieveAccount,
 } from "@convex-dev/auth/server";
 import { api, internal } from "./_generated/api";
-import { getActiveUserId, requireAdministrador } from "./permissions";
-import { findUsersByEmailInsensitive } from "./lib.js";
+import { getActiveUserId, isActiveUser, requireAdministrador } from "./permissions";
+import { failpoint, findUsersByEmailInsensitive } from "./lib.js";
 import { role } from "./validators.js";
 
 /**
@@ -112,7 +112,90 @@ export const listTeam = query({
   handler: async (ctx) => {
     await requireAdministrador(ctx);
     const users = await ctx.db.query("users").collect();
-    return users.map((u) => ({ _id: u._id, name: u.name, email: u.email, role: u.role }));
+    return users.map((u) => ({ _id: u._id, name: u.name, email: u.email, role: u.role, disabledAt: u.disabledAt ?? null }));
+  },
+});
+
+/**
+ * ICS-117 — desactivar una cuenta (solo administrador). Todo en esta única
+ * mutation, así que se aplica completo o nada: marca `disabledAt`, cierra
+ * todas sus sesiones (y sus refresh tokens), borra sus códigos de
+ * recuperación pendientes y quita su vinculación con Google. A partir de
+ * aquí no puede entrar por ningún medio (`isActiveUser` en convex/auth.js y
+ * convex/permissions.js) ni recuperar su contraseña. Sus datos del CRM
+ * (prospectos, ventas, historial) no se tocan.
+ *
+ * Nunca deja el CRM sin administradora activa: nadie puede desactivarse a sí
+ * mismo, y quien llama debe ser una administradora activa. Si dos
+ * administradoras se desactivan una a otra al mismo tiempo, Convex serializa
+ * las dos mutations: la segunda se reintenta, ve que quien la llama ya está
+ * desactivada y la rechaza `requireAdministrador`. El conteo de abajo es una
+ * defensa extra por si esa regla cambiara.
+ */
+export const deactivateUser = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const me = await requireAdministrador(ctx);
+    if (userId === me._id) throw new Error("No puedes desactivar tu propia cuenta.");
+    const target = await ctx.db.get(userId);
+    if (!target) throw new Error("Usuario no encontrado.");
+    if (target.disabledAt) return null;
+
+    if (target.role === "administrador") {
+      const activeAdmins = (await ctx.db.query("users").collect()).filter(
+        (u) => u.role === "administrador" && isActiveUser(u),
+      );
+      if (activeAdmins.filter((u) => u._id !== userId).length === 0) {
+        throw new Error("El CRM debe conservar al menos una administradora activa.");
+      }
+    }
+
+    await ctx.db.patch(userId, { disabledAt: Date.now() });
+
+    const sessions = await ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", userId)).collect();
+    for (const session of sessions) {
+      const tokens = await ctx.db.query("authRefreshTokens").withIndex("sessionId", (q) => q.eq("sessionId", session._id)).collect();
+      for (const token of tokens) await ctx.db.delete(token._id);
+      await ctx.db.delete(session._id);
+    }
+    failpoint("deactivate_after_sessions");
+
+    if (target.email) {
+      const codes = await ctx.db
+        .query("passwordResetCodes")
+        .withIndex("by_email", (q) => q.eq("email", target.email.trim().toLowerCase()))
+        .collect();
+      for (const code of codes) await ctx.db.delete(code._id);
+    }
+
+    const googleAccounts = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "google"))
+      .collect();
+    for (const account of googleAccounts) {
+      const verifications = await ctx.db.query("authVerificationCodes").withIndex("accountId", (q) => q.eq("accountId", account._id)).collect();
+      for (const verification of verifications) await ctx.db.delete(verification._id);
+      await ctx.db.delete(account._id);
+    }
+    return null;
+  },
+});
+
+/**
+ * ICS-117 — reactivar una cuenta desactivada (solo administrador). Solo quita
+ * `disabledAt`: no restaura sesiones, códigos ni la vinculación con Google.
+ * La persona entra con su contraseña de siempre (o pide un restablecimiento)
+ * y, si usaba Google, se vuelve a vincular al entrar con él (hasta ICS-118,
+ * que exigirá un permiso explícito para Google).
+ */
+export const reactivateUser = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await requireAdministrador(ctx);
+    const target = await ctx.db.get(userId);
+    if (!target) throw new Error("Usuario no encontrado.");
+    if (target.disabledAt) await ctx.db.patch(userId, { disabledAt: undefined });
+    return null;
   },
 });
 
@@ -270,6 +353,7 @@ export const resetUserPassword = action({
     const target = await ctx.runQuery(internal.users.getUserById, { userId });
     if (!target) throw new Error("Usuario no encontrado.");
     if (!target.email) throw new Error("Ese usuario no tiene correo asociado.");
+    if (target.disabledAt) throw new Error("Esa cuenta está desactivada. Reactívala antes de restablecer su contraseña.");
 
     const tempPassword = generateTempPassword();
     await modifyAccountCredentials(ctx, { provider: "password", account: { id: target.email, secret: tempPassword } });

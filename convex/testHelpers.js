@@ -369,3 +369,17 @@ export const seedSmokeResetRequests = internalMutation({
     return agesMs.length;
   },
 });
+
+/**
+ * ICS-117 — vincula una cuenta de Google ficticia a una fila de prueba, para
+ * comprobar que desactivar la quita (sin pasar por un login real de Google).
+ */
+export const insertSmokeGoogleAccount = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    requireSmokeAuthEmail(email);
+    const user = (await ctx.db.query("users").collect()).find((u) => u.email === email);
+    if (!user) throw new Error(`No existe la fila de prueba ${email}.`);
+    return ctx.db.insert("authAccounts", { userId: user._id, provider: "google", providerAccountId: `smoke-google-${user._id}` });
+  },
+});
