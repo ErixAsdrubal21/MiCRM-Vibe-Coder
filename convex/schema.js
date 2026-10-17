@@ -38,6 +38,8 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     role,
+    // ICS-117 — cuenta desactivada por una administradora (ms). Sin el campo = activa.
+    disabledAt: v.optional(v.number()),
   }).index("by_email", ["email"]),
 
   prospects: defineTable({

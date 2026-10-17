@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { Scrypt } from "lucia";
 import { findUsersByEmailInsensitive } from "./lib.js";
+import { isActiveUser } from "./permissions.js";
 import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from "./email.js";
 
 /**
@@ -107,7 +108,7 @@ export const reserveCode = internalMutation({
     await ctx.db.insert("passwordResetRequests", { email, requestedAt: now });
 
     const matches = await findUsersByEmailInsensitive(ctx.db, email);
-    if (matches.length !== 1 || !matches[0].role) return null;
+    if (matches.length !== 1 || !isActiveUser(matches[0])) return null; // ICS-117: desactivada = sin código
     const user = matches[0];
     if (!(await passwordAccount(ctx.db, user._id)) || !canReceiveEmail(user.email)) return null;
 
@@ -154,8 +155,8 @@ export const confirm = mutation({
     }
 
     const user = await ctx.db.get(row.userId);
-    const account = user ? await passwordAccount(ctx.db, user._id) : null;
-    if (!user || !account) {
+    const account = isActiveUser(user) ? await passwordAccount(ctx.db, user._id) : null;
+    if (!account) {
       await ctx.db.delete(row._id);
       return { ok: false, reason: "INVALID_CODE" };
     }

@@ -28,6 +28,16 @@ export default function AppLayout({ children }) {
     if (!isLoading && !isAuthenticated) router.replace("/login");
   }, [isLoading, isAuthenticated, router]);
 
+  // ICS-117: el token local sigue vigente (hasta 1 h), pero el servidor ya no
+  // reconoce al usuario — su sesión se cerró (cuenta desactivada, contraseña
+  // cambiada o restablecida). Sin esto la pantalla se queda en blanco: se
+  // descarta el token local y se manda al login.
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && session === null) {
+      signOut().finally(() => router.replace("/login"));
+    }
+  }, [isLoading, isAuthenticated, session, signOut, router]);
+
   if (isLoading || !isAuthenticated || !session) return null;
 
   const nav = NAV_BY_ROLE[session.role];

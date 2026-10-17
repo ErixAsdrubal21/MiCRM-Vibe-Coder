@@ -8,7 +8,8 @@ import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
  */
 
 /**
- * ICS-111 — usuario del token solo si su sesión sigue viva. `getAuthUserId`
+ * ICS-111 — usuario del token solo si su sesión sigue viva (y, desde ICS-117,
+ * solo si la cuenta sigue activa). `getAuthUserId`
  * lee el JWT sin consultar la base, así que un token ya emitido seguiría
  * valiendo (hasta su vencimiento) aunque `invalidateSessions` haya borrado la
  * sesión al cambiar o restablecer la contraseña. Al leer `authSessions`, las
@@ -20,7 +21,18 @@ export async function getActiveUserId(ctx) {
   if (!userId || !sessionId) return null;
   const session = await ctx.db.get(sessionId);
   if (!session || session.userId !== userId || session.expirationTime <= Date.now()) return null;
+  const user = await ctx.db.get(userId);
+  if (!isActiveUser(user)) return null;
   return userId;
+}
+
+/**
+ * ICS-117 — una cuenta puede entrar y operar solo si existe, tiene rol y no
+ * está desactivada. Única definición de "activa": la usan la sesión (aquí),
+ * el login (`convex/auth.js`) y la recuperación de contraseña.
+ */
+export function isActiveUser(user) {
+  return Boolean(user && user.role && !user.disabledAt);
 }
 
 export async function requireAuthenticatedUser(ctx) {
