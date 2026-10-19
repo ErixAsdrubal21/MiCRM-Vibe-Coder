@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { recordTimelineEvent, syncPendingFollowUpOwner, syncOpenOpportunitiesOwner } from "./lib";
+import { resolveSignInUser } from "./auth.js";
 
 const SMOKE_PREFIXES = [
   "[SMOKE ICS-92]",
@@ -279,6 +280,8 @@ export const dumpSmokeAuth = internalQuery({
         email: u.email,
         role: u.role ?? null,
         accounts: accounts.map((a) => `${a.provider}:${a.providerAccountId}`),
+        googleAllowed: Boolean(u.googleAllowed),
+        disabledAt: u.disabledAt ?? null,
         sessions: sessions.length,
       });
     }
@@ -380,6 +383,37 @@ export const insertSmokeGoogleAccount = internalMutation({
     requireSmokeAuthEmail(email);
     const user = (await ctx.db.query("users").collect()).find((u) => u.email === email);
     if (!user) throw new Error(`No existe la fila de prueba ${email}.`);
-    return ctx.db.insert("authAccounts", { userId: user._id, provider: "google", providerAccountId: `smoke-google-${user._id}` });
+    const accountId = await ctx.db.insert("authAccounts", { userId: user._id, provider: "google", providerAccountId: `smoke-google-${user._id}` });
+    // ICS-118: un código OAuth pendiente, como el de un login de Google a medias.
+    await ctx.db.insert("authVerificationCodes", { accountId, provider: "google", code: `smoke-${accountId}`, expirationTime: Date.now() + 10 * 60 * 1000 });
+    return accountId;
+  },
+});
+
+/** ICS-118 — códigos OAuth pendientes de una vinculación de Google de prueba (por id de cuenta). */
+export const countSmokeVerificationCodes = internalQuery({
+  args: { accountId: v.id("authAccounts") },
+  handler: async (ctx, { accountId }) =>
+    (await ctx.db.query("authVerificationCodes").withIndex("accountId", (q) => q.eq("accountId", accountId)).collect()).length,
+});
+
+/**
+ * ICS-118 — corre la misma regla que `createOrUpdateUser` (convex/auth.js
+ * `resolveSignInUser`) para un correo de prueba, como si llegara un login de
+ * Google (`type: "oauth"`) o de contraseña. Devuelve el usuario elegido o el
+ * motivo del rechazo, sin crear nada.
+ */
+export const smokeResolveSignInUser = internalMutation({
+  args: { email: v.string(), type: v.string(), useExistingLink: v.boolean() },
+  handler: async (ctx, { email, type, useExistingLink }) => {
+    requireSmokeAuthEmail(email);
+    const user = (await ctx.db.query("users").collect()).find((u) => u.email === email);
+    if (!user) throw new Error(`No existe la fila de prueba ${email}.`);
+    try {
+      const userId = await resolveSignInUser(ctx.db, { existingUserId: useExistingLink ? user._id : null, type, email });
+      return { ok: true, userId };
+    } catch (e) {
+      return { ok: false, reason: String(e.message) };
+    }
   },
 });

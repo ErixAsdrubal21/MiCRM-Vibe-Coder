@@ -190,22 +190,40 @@ function TeamSection({ ownUserId, showInviteForm, setShowInviteForm }) {
  * Fila de miembro del equipo: "restablecer contraseña" (hallazgo de
  * auditoría PRD↔app, 2026-09-13 — ver `resetUserPassword` en convex/users.js
  * para el porqué de esta forma en vez de un correo de recuperación) y
- * desactivar/reactivar la cuenta (ICS-117). Nada de esto se ofrece sobre la
- * propia fila del admin — para uno mismo ya existe "Cambiar contraseña"
- * arriba, y nadie puede desactivarse a sí mismo.
+ * desactivar/reactivar la cuenta (ICS-117) y permitir/quitar Google
+ * (ICS-118). Restablecer y desactivar no se ofrecen sobre la propia fila del
+ * admin — para uno mismo ya existe "Cambiar contraseña" arriba, y nadie puede
+ * desactivarse a sí mismo —; Google sí, para poder permitírselo a sí misma.
  */
-const CONFIRM_LABEL = { reset: "Sí, restablecer", deactivate: "Sí, desactivar", reactivate: "Sí, reactivar" };
+const CONFIRM_LABEL = {
+  reset: "Sí, restablecer",
+  deactivate: "Sí, desactivar",
+  reactivate: "Sí, reactivar",
+  allowGoogle: "Sí, permitir",
+  removeGoogle: "Sí, quitar",
+};
 const CONFIRM_QUESTION = {
-  reset: (name) => `¿Restablecer la contraseña de ${name}?`,
+  reset: (name) => `¿Restablecer la contraseña de ${name}? También se le quitará el acceso con Google.`,
   deactivate: (name) => `¿Desactivar a ${name}? Se cerrarán sus sesiones y no podrá entrar. Sus datos se conservan.`,
   reactivate: (name) => `¿Reactivar a ${name}? Podrá volver a entrar con su contraseña.`,
+  allowGoogle: (name) => `¿Permitir que ${name} entre con Google? Solo con una cuenta de Google que tenga su mismo correo.`,
+  removeGoogle: (name, isSelf) =>
+    isSelf
+      ? "¿Quitarte el acceso con Google? Se cerrarán tus otras sesiones; esta sigue abierta."
+      : `¿Quitar el acceso con Google a ${name}? Se desvincula su cuenta de Google y se cierran sus sesiones.`,
 };
+
+function googleStatus(member) {
+  if (!member.googleAllowed) return "";
+  return member.googleLinked ? " · Google vinculado" : " · Google permitido";
+}
 
 function TeamMemberRow({ member, isSelf }) {
   const resetUserPassword = useAction(api.users.resetUserPassword);
   const deactivateUser = useMutation(api.users.deactivateUser);
   const reactivateUser = useMutation(api.users.reactivateUser);
-  const [confirming, setConfirming] = useState(null); // null | "reset" | "deactivate" | "reactivate"
+  const setGoogleAllowed = useMutation(api.users.setGoogleAllowed);
+  const [confirming, setConfirming] = useState(null); // null | clave de CONFIRM_LABEL
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [tempPassword, setTempPassword] = useState(null);
@@ -222,6 +240,8 @@ function TeamMemberRow({ member, isSelf }) {
         await deactivateUser({ userId: member._id });
       } else if (confirming === "reactivate") {
         await reactivateUser({ userId: member._id });
+      } else if (confirming === "allowGoogle" || confirming === "removeGoogle") {
+        await setGoogleAllowed({ userId: member._id, allowed: confirming === "allowGoogle" });
       }
       setConfirming(null);
     } catch (err) {
@@ -248,24 +268,31 @@ function TeamMemberRow({ member, isSelf }) {
     <div className={`team-row${disabled ? " team-row--disabled" : ""}`}>
       <div>
         <p className="team-row__name">{member.name}</p>
-        <p className="team-row__role">{ROLE_LABEL[member.role]}{disabled && " · Desactivada"}</p>
-        {confirming && <p className="team-row__confirm">{CONFIRM_QUESTION[confirming](member.name)}</p>}
+        <p className="team-row__role">{ROLE_LABEL[member.role]}{disabled ? " · Desactivada" : googleStatus(member)}</p>
+        {confirming && <p className="team-row__confirm">{CONFIRM_QUESTION[confirming](member.name, isSelf)}</p>}
         {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 11.5, color: "var(--color-critical)", margin: "2px 0 0" }}>{error}</p>}
       </div>
-      {!isSelf && (
-        confirming ? (
-          <div style={{ display: "flex", gap: 6 }}>
-            <Button variant="secondary" disabled={busy} onClick={() => setConfirming(null)}>No</Button>
-            <Button variant="primary" disabled={busy} onClick={handleConfirm}>{busy ? "..." : CONFIRM_LABEL[confirming]}</Button>
-          </div>
-        ) : disabled ? (
-          <IconButton icon="user-check" label={`Reactivar a ${member.name}`} onClick={() => setConfirming("reactivate")} />
-        ) : (
-          <div style={{ display: "flex", gap: 4 }}>
-            <IconButton icon="key-round" label={`Restablecer contraseña de ${member.name}`} onClick={() => setConfirming("reset")} />
-            <IconButton icon="user-x" label={`Desactivar a ${member.name}`} onClick={() => setConfirming("deactivate")} />
-          </div>
-        )
+      {confirming ? (
+        <div style={{ display: "flex", gap: 6 }}>
+          <Button variant="secondary" disabled={busy} onClick={() => setConfirming(null)}>No</Button>
+          <Button variant="primary" disabled={busy} onClick={handleConfirm}>{busy ? "..." : CONFIRM_LABEL[confirming]}</Button>
+        </div>
+      ) : disabled ? (
+        !isSelf && <IconButton icon="user-check" label={`Reactivar a ${member.name}`} onClick={() => setConfirming("reactivate")} />
+      ) : (
+        <div style={{ display: "flex", gap: 4 }}>
+          {member.googleAllowed ? (
+            <IconButton icon="unlink" label={`Quitar Google a ${member.name}`} onClick={() => setConfirming("removeGoogle")} />
+          ) : (
+            <IconButton icon="link" label={`Permitir Google a ${member.name}`} onClick={() => setConfirming("allowGoogle")} />
+          )}
+          {!isSelf && (
+            <>
+              <IconButton icon="key-round" label={`Restablecer contraseña de ${member.name}`} onClick={() => setConfirming("reset")} />
+              <IconButton icon="user-x" label={`Desactivar a ${member.name}`} onClick={() => setConfirming("deactivate")} />
+            </>
+          )}
+        </div>
       )}
     </div>
   );

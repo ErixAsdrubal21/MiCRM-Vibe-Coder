@@ -40,6 +40,8 @@ export default defineSchema({
     role,
     // ICS-117 — cuenta desactivada por una administradora (ms). Sin el campo = activa.
     disabledAt: v.optional(v.number()),
+    // ICS-118 — puede entrar con Google. Sin el campo = no (altas nuevas). Solo lo cambia una administradora.
+    googleAllowed: v.optional(v.boolean()),
   }).index("by_email", ["email"]),
 
   prospects: defineTable({

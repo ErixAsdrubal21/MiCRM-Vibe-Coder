@@ -9,6 +9,7 @@ import {
 } from "@convex-dev/auth/server";
 import { api, internal } from "./_generated/api";
 import { getActiveUserId, isActiveUser, requireAdministrador } from "./permissions";
+import { deletePasswordResetCodes, deleteUserSessions, unlinkGoogle } from "./access.js";
 import { failpoint, findUsersByEmailInsensitive } from "./lib.js";
 import { role } from "./validators.js";
 
@@ -112,7 +113,17 @@ export const listTeam = query({
   handler: async (ctx) => {
     await requireAdministrador(ctx);
     const users = await ctx.db.query("users").collect();
-    return users.map((u) => ({ _id: u._id, name: u.name, email: u.email, role: u.role, disabledAt: u.disabledAt ?? null }));
+    const googleAccounts = await ctx.db.query("authAccounts").withIndex("providerAndAccountId", (q) => q.eq("provider", "google")).collect();
+    const linked = new Set(googleAccounts.map((a) => a.userId));
+    return users.map((u) => ({
+      _id: u._id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      disabledAt: u.disabledAt ?? null,
+      googleAllowed: Boolean(u.googleAllowed),
+      googleLinked: linked.has(u._id),
+    }));
   },
 });
 
@@ -120,7 +131,7 @@ export const listTeam = query({
  * ICS-117 — desactivar una cuenta (solo administrador). Todo en esta única
  * mutation, así que se aplica completo o nada: marca `disabledAt`, cierra
  * todas sus sesiones (y sus refresh tokens), borra sus códigos de
- * recuperación pendientes y quita su vinculación con Google. A partir de
+ * recuperación pendientes y quita su vinculación y su permiso de Google. A partir de
  * aquí no puede entrar por ningún medio (`isActiveUser` en convex/auth.js y
  * convex/permissions.js) ni recuperar su contraseña. Sus datos del CRM
  * (prospectos, ventas, historial) no se tocan.
@@ -151,42 +162,20 @@ export const deactivateUser = mutation({
     }
 
     await ctx.db.patch(userId, { disabledAt: Date.now() });
-
-    const sessions = await ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", userId)).collect();
-    for (const session of sessions) {
-      const tokens = await ctx.db.query("authRefreshTokens").withIndex("sessionId", (q) => q.eq("sessionId", session._id)).collect();
-      for (const token of tokens) await ctx.db.delete(token._id);
-      await ctx.db.delete(session._id);
-    }
+    await deleteUserSessions(ctx.db, userId);
     failpoint("deactivate_after_sessions");
-
-    if (target.email) {
-      const codes = await ctx.db
-        .query("passwordResetCodes")
-        .withIndex("by_email", (q) => q.eq("email", target.email.trim().toLowerCase()))
-        .collect();
-      for (const code of codes) await ctx.db.delete(code._id);
-    }
-
-    const googleAccounts = await ctx.db
-      .query("authAccounts")
-      .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "google"))
-      .collect();
-    for (const account of googleAccounts) {
-      const verifications = await ctx.db.query("authVerificationCodes").withIndex("accountId", (q) => q.eq("accountId", account._id)).collect();
-      for (const verification of verifications) await ctx.db.delete(verification._id);
-      await ctx.db.delete(account._id);
-    }
+    await deletePasswordResetCodes(ctx.db, target.email);
+    await unlinkGoogle(ctx.db, userId);
     return null;
   },
 });
 
 /**
  * ICS-117 — reactivar una cuenta desactivada (solo administrador). Solo quita
- * `disabledAt`: no restaura sesiones, códigos ni la vinculación con Google.
- * La persona entra con su contraseña de siempre (o pide un restablecimiento)
- * y, si usaba Google, se vuelve a vincular al entrar con él (hasta ICS-118,
- * que exigirá un permiso explícito para Google).
+ * `disabledAt`: no restaura sesiones, códigos ni Google (desactivar apagó
+ * `googleAllowed`; una administradora lo vuelve a permitir aparte si hace
+ * falta). La persona entra con su contraseña de siempre o pide un
+ * restablecimiento.
  */
 export const reactivateUser = mutation({
   args: { userId: v.id("users") },
@@ -196,6 +185,64 @@ export const reactivateUser = mutation({
     if (!target) throw new Error("Usuario no encontrado.");
     if (target.disabledAt) await ctx.db.patch(userId, { disabledAt: undefined });
     return null;
+  },
+});
+
+/**
+ * ICS-118 — permitir o quitar el acceso con Google (solo administrador,
+ * también sobre su propia cuenta). Permitir solo marca `googleAllowed`; la
+ * vinculación se crea cuando la persona entra con una cuenta de Google con
+ * su mismo correo (convex/auth.js `resolveSignInUser`). Quitar, en la misma
+ * transacción: borra la vinculación y los códigos OAuth pendientes, apaga el
+ * permiso y cierra todas las sesiones de la persona —las sesiones no
+ * registran con qué se entró—, salvo la de quien lo hace si es su propia
+ * cuenta.
+ */
+export const setGoogleAllowed = mutation({
+  args: { userId: v.id("users"), allowed: v.boolean() },
+  handler: async (ctx, { userId, allowed }) => {
+    const me = await requireAdministrador(ctx);
+    const target = await ctx.db.get(userId);
+    if (!target) throw new Error("Usuario no encontrado.");
+    if (allowed) {
+      if (!isActiveUser(target)) throw new Error("Esa cuenta está desactivada. Reactívala antes de permitirle Google.");
+      await ctx.db.patch(userId, { googleAllowed: true });
+      return null;
+    }
+    await unlinkGoogle(ctx.db, userId);
+    await deleteUserSessions(ctx.db, userId, userId === me._id ? await getAuthSessionId(ctx) : null);
+    return null;
+  },
+});
+
+/**
+ * ICS-118 — lo mismo que `setGoogleAllowed`, por correo y sin sesión de
+ * administrador: solo para la migración y soporte (`npx convex run
+ * users:setGoogleAllowedByEmail`), nunca desde la UI.
+ */
+export const setGoogleAllowedByEmail = internalMutation({
+  args: { email: v.string(), allowed: v.boolean() },
+  handler: async (ctx, { email, allowed }) => {
+    const matches = await findUsersByEmailInsensitive(ctx.db, email);
+    if (matches.length !== 1) throw new Error(`Se esperaba exactamente una cuenta con el correo ${email}; hay ${matches.length}.`);
+    const user = matches[0];
+    if (allowed) {
+      if (!isActiveUser(user)) throw new Error(`La cuenta ${email} está desactivada.`);
+      await ctx.db.patch(user._id, { googleAllowed: true });
+    } else {
+      await unlinkGoogle(ctx.db, user._id);
+      await deleteUserSessions(ctx.db, user._id);
+    }
+    return { userId: user._id, googleAllowed: allowed };
+  },
+});
+
+/** ICS-118 — quita Google y cierra sesiones; para `resetUserPassword`, que corre en una action. */
+export const unlinkGoogleAndSessions = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await unlinkGoogle(ctx.db, userId);
+    await deleteUserSessions(ctx.db, userId);
   },
 });
 
@@ -355,6 +402,10 @@ export const resetUserPassword = action({
     if (!target.email) throw new Error("Ese usuario no tiene correo asociado.");
     if (target.disabledAt) throw new Error("Esa cuenta está desactivada. Reactívala antes de restablecer su contraseña.");
 
+    // ICS-118: restablecer desde administración también quita Google (primero,
+    // para que una falla a medio camino deje la cuenta más cerrada, no menos).
+    // Paso separado hasta ICS-120, que hará todo esto en una sola transacción.
+    await ctx.runMutation(internal.users.unlinkGoogleAndSessions, { userId: target._id });
     const tempPassword = generateTempPassword();
     await modifyAccountCredentials(ctx, { provider: "password", account: { id: target.email, secret: tempPassword } });
     await invalidateSessions(ctx, { userId: target._id });

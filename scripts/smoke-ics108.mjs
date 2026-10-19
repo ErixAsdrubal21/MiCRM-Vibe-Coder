@@ -5,6 +5,9 @@
 // (convex/auth.js) exactamente como lo haría un regreso real de Google.
 // Lo único que NO cubre es el intercambio HTTP con Google; el filtro
 // `email_verified` se prueba aparte llamando `googleProfileOrReject`.
+// Desde ICS-118 la cuenta además necesita `googleAllowed`: se comprueba que
+// sin él se rechaza, se permite con users:setGoogleAllowedByEmail y, al
+// final, que quitarlo rechaza también la vinculación ya existente.
 //
 // USO (contra el deployment de DESARROLLO; `npx convex run` usa el de
 // .env.local — nunca correr con --prod):
@@ -102,6 +105,9 @@ try {
   // M1: invitado con mayúsculas (flujo real de inviteUser) entra con Google en minúsculas
   const invitedId = run("users:createPendingUserRow", { email: INVITED, name: "[SMOKE ICS-108]", role: "vendedor" });
   run("users:provisionPassword", { email: INVITED, password });
+  check("ICS-118: sin permiso de Google, el regreso de Google se rechaza", googleRejected(INVITED.toLowerCase(), "smoke-sub-persona"));
+  check("…y no crea la vinculación", !byEmail(INVITED)?.accounts.some((a) => a.startsWith("google:")));
+  run("users:setGoogleAllowedByEmail", { email: INVITED, allowed: true });
   const googleUserId = googleSignIn(INVITED.toLowerCase(), "smoke-sub-persona");
   check("Google en minúsculas vincula al invitado con mayúsculas", googleUserId === invitedId, `${googleUserId} vs ${invitedId}`);
   const persona = byEmail(INVITED);
@@ -160,6 +166,11 @@ try {
     "El vínculo de Google existente sigue apuntando al mismo usuario tras el cambio",
     googleSignIn("smoke-ics108-nuevo@example.com", "smoke-sub-persona") === invitedId,
   );
+
+  // ICS-118: quitar el permiso rechaza también la vinculación ya existente, sin revincular
+  run("users:setGoogleAllowedByEmail", { email: "smoke-ics108-nuevo@example.com", allowed: false });
+  check("ICS-118: quitado el permiso, el mismo Google ya no entra", googleRejected("smoke-ics108-nuevo@example.com", "smoke-sub-persona"));
+  check("…y la vinculación queda borrada", !byEmail("smoke-ics108-nuevo@example.com")?.accounts.some((a) => a.startsWith("google:")));
 
   const after = dump().totalUsers;
   check("No se creó ningún usuario fuera de los sembrados", after === baseline + 3, `${baseline} → ${after}`);

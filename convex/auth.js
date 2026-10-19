@@ -56,6 +56,35 @@ const GoogleProvisionedOnly = Google({ profile: googleProfileOrReject });
  * en ICS-108: con él activo, restringir Google no protegía nada.
  */
 const DISABLED_MSG = "Esta cuenta está desactivada. Contacta a un administrador.";
+const NO_ACCOUNT_MSG = "No existe una cuenta para este correo. Contacta a un administrador.";
+const GOOGLE_NOT_ALLOWED_MSG = "Esta cuenta no tiene permitido entrar con Google. Contacta a un administrador.";
+
+/**
+ * Decide a qué fila de `users` se vincula un inicio de sesión (o lo rechaza).
+ * Es la lógica de `createOrUpdateUser`, separada para poder probarla sin un
+ * login real de Google (`testHelpers:smokeResolveSignInUser`).
+ *
+ * - Nunca crea usuarios: solo vincula a una fila existente con ese correo.
+ * - La cuenta debe estar activa (ICS-117).
+ * - Con Google (`type === "oauth"`), además debe tener `googleAllowed` (ICS-118),
+ *   tanto la primera vez como en cada entrada posterior. Si una administradora
+ *   le quita Google, la vinculación se borra (convex/access.js `unlinkGoogle`)
+ *   y un login nuevo —o uno que ya estaba a medias— cae aquí y se rechaza.
+ */
+export async function resolveSignInUser(db, { existingUserId, type, email }) {
+  const oauth = type === "oauth";
+  if (existingUserId) {
+    const user = await db.get(existingUserId);
+    if (!isActiveUser(user)) throw new Error(DISABLED_MSG);
+    if (oauth && !user.googleAllowed) throw new Error(GOOGLE_NOT_ALLOWED_MSG);
+    return existingUserId;
+  }
+
+  const matches = await findUsersByEmailInsensitive(db, email);
+  if (matches.length !== 1 || !isActiveUser(matches[0])) throw new Error(NO_ACCOUNT_MSG);
+  if (oauth && !matches[0].googleAllowed) throw new Error(GOOGLE_NOT_ALLOWED_MSG);
+  return matches[0]._id;
+}
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
@@ -70,16 +99,8 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     GoogleProvisionedOnly,
   ],
   callbacks: {
-    async createOrUpdateUser(ctx, { existingUserId, profile }) {
-      if (existingUserId) {
-        if (!isActiveUser(await ctx.db.get(existingUserId))) throw new Error(DISABLED_MSG);
-        return existingUserId;
-      }
-
-      const matches = await findUsersByEmailInsensitive(ctx.db, profile.email);
-      if (matches.length === 1 && isActiveUser(matches[0])) return matches[0]._id;
-
-      throw new Error("No existe una cuenta para este correo. Contacta a un administrador.");
+    async createOrUpdateUser(ctx, { existingUserId, type, profile }) {
+      return resolveSignInUser(ctx.db, { existingUserId, type, email: profile.email });
     },
     // ICS-117 — el login con contraseña no pasa por `createOrUpdateUser`; este
     // callback corre antes de crear CUALQUIER sesión, sea cual sea el proveedor.
