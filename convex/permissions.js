@@ -1,4 +1,5 @@
 import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
+import { ConvexError } from "convex/values";
 
 /**
  * Seguridad real (ICS-6/7/8): la identidad se deriva del servidor con
@@ -37,16 +38,16 @@ export function isActiveUser(user) {
 
 export async function requireAuthenticatedUser(ctx) {
   const userId = await getActiveUserId(ctx);
-  if (!userId) throw new Error("No autenticado.");
+  if (!userId) throw new ConvexError("No autenticado.");
   const user = await ctx.db.get(userId);
-  if (!user) throw new Error("Usuario no encontrado.");
+  if (!user) throw new ConvexError("Usuario no encontrado.");
   return user;
 }
 
 export async function requireVendedor(ctx) {
   const user = await requireAuthenticatedUser(ctx);
   if (user.role !== "vendedor") {
-    throw new Error("Solo un vendedor puede realizar esta acción.");
+    throw new ConvexError("Solo un vendedor puede realizar esta acción.");
   }
   return user;
 }
@@ -54,14 +55,14 @@ export async function requireVendedor(ctx) {
 export async function requireAdministrador(ctx) {
   const user = await requireAuthenticatedUser(ctx);
   if (user.role !== "administrador") {
-    throw new Error("Solo un administrador puede ver esta información.");
+    throw new ConvexError("Solo un administrador puede ver esta información.");
   }
   return user;
 }
 
 export async function requireProspect(ctx, id) {
   const prospect = await ctx.db.get(id);
-  if (!prospect) throw new Error("Prospecto no encontrado.");
+  if (!prospect) throw new ConvexError("Prospecto no encontrado.");
   return prospect;
 }
 
@@ -74,7 +75,7 @@ export async function requireOwnedProspect(ctx, prospectId) {
   const user = await requireVendedor(ctx);
   const prospect = await requireProspect(ctx, prospectId);
   if (prospect.ownerId !== user._id) {
-    throw new Error("No puedes operar sobre un prospecto que no es tuyo.");
+    throw new ConvexError("No puedes operar sobre un prospecto que no es tuyo.");
   }
   return { user, prospect };
 }
@@ -90,5 +91,5 @@ export async function requireProspectRead(ctx, prospectId) {
   const prospect = await requireProspect(ctx, prospectId);
   if (user.role === "administrador") return { user, prospect };
   if (user.role === "vendedor" && prospect.ownerId === user._id) return { user, prospect };
-  throw new Error("No puedes ver la información de este prospecto.");
+  throw new ConvexError("No puedes ver la información de este prospecto.");
 }

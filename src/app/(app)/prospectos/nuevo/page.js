@@ -8,6 +8,7 @@ import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { CHANNELS } from "@/lib/prospects.js";
 import { prospectoHref } from "@/lib/routes.js";
+import { errorMessage } from "@/lib/errors.js";
 
 export default function NuevoProspecto() {
   const router = useRouter();
@@ -29,7 +30,7 @@ export default function NuevoProspecto() {
       const prospect = await createProspect({ name, phone, channel, interest, note });
       router.replace(prospectoHref(prospect._id));
     } catch (err) {
-      setError(err.message ?? "No se pudo guardar el prospecto.");
+      setError(errorMessage(err, "No se pudo guardar el prospecto."));
       setSubmitting(false);
     }
   }

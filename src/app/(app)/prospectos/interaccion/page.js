@@ -10,6 +10,7 @@ import { Button } from "@/design/components/core/Button.jsx";
 import { isActiveStage, CONTACT_TYPES, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
 import { todayISO, plusDaysISO } from "@/lib/dates.js";
 import { prospectoHref } from "@/lib/routes.js";
+import { errorMessage } from "@/lib/errors.js";
 
 function defaultFollowUpDate(prospect) {
   return plusDaysISO(prospect.stage === "cotizacion" ? 2 : 1);
@@ -66,7 +67,7 @@ export default function RegistrarInteraccion() {
       });
       router.replace(prospectoHref(prospect._id));
     } catch (err) {
-      setError(err.message ?? "No se pudo registrar la interacción.");
+      setError(errorMessage(err, "No se pudo registrar la interacción."));
       setSubmitting(false);
     }
   }

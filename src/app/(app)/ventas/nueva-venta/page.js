@@ -11,6 +11,7 @@ import { Badge } from "@/design/components/core/Badge.jsx";
 import { useSession, homePathForRole } from "@/lib/session.js";
 import { todayISO } from "@/lib/dates.js";
 import { prospectoHref } from "@/lib/routes.js";
+import { errorMessage } from "@/lib/errors.js";
 
 /**
  * ICS-103 — "Registrar venta directa": venta sin oportunidad previa
@@ -66,7 +67,7 @@ export default function NuevaVentaDirecta() {
       });
       router.replace(prospectoHref(selected._id));
     } catch (err) {
-      setError(err.message ?? "No se pudo registrar la venta.");
+      setError(errorMessage(err, "No se pudo registrar la venta."));
       setSubmitting(false);
     }
   }

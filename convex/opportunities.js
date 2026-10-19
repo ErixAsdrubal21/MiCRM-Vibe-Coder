@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireVendedor, requireAuthenticatedUser, requireOwnedProspect, requireProspectRead } from "./permissions";
 import { recordTimelineEvent, isValidCalendarDate, requireBoundedText, resolveClosedAt } from "./lib";
@@ -20,7 +20,7 @@ import { OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
 function requireExpectedCloseDate(expectedCloseDate) {
   if (expectedCloseDate === undefined) return undefined;
   if (!isValidCalendarDate(expectedCloseDate)) {
-    throw new Error('Fecha esperada inválida (usa "YYYY-MM-DD").');
+    throw new ConvexError('Fecha esperada inválida (usa "YYYY-MM-DD").');
   }
   return expectedCloseDate;
 }
@@ -28,7 +28,7 @@ function requireExpectedCloseDate(expectedCloseDate) {
 /** `create`/`update` exigen monto > 0 — solo las migradas quedan con "monto pendiente" (ICS-98 B1). */
 function requireEstimatedAmount(estimatedAmount) {
   if (typeof estimatedAmount !== "number" || estimatedAmount <= 0) {
-    throw new Error("El monto estimado debe ser mayor a 0.");
+    throw new ConvexError("El monto estimado debe ser mayor a 0.");
   }
   return estimatedAmount;
 }
@@ -46,7 +46,7 @@ export const create = mutation({
     const { user } = await requireOwnedProspect(ctx, prospectId);
     const targetStage = initialStage ?? "calificacion";
     if (!OPPORTUNITY_OPEN_STAGES.includes(targetStage)) {
-      throw new Error("Una oportunidad se crea en una etapa abierta (calificación, cotización o negociación).");
+      throw new ConvexError("Una oportunidad se crea en una etapa abierta (calificación, cotización o negociación).");
     }
     const _id = await ctx.db.insert("opportunities", {
       prospectId,
@@ -75,12 +75,12 @@ export const update = mutation({
   handler: async (ctx, { id, name, product, estimatedAmount, stage: newStage, expectedCloseDate }) => {
     const user = await requireVendedor(ctx);
     const opportunity = await ctx.db.get(id);
-    if (!opportunity) throw new Error("Oportunidad no encontrada.");
+    if (!opportunity) throw new ConvexError("Oportunidad no encontrada.");
     if (opportunity.ownerId !== user._id) {
-      throw new Error("No puedes editar una oportunidad que no es tuya.");
+      throw new ConvexError("No puedes editar una oportunidad que no es tuya.");
     }
     if (!OPPORTUNITY_OPEN_STAGES.includes(opportunity.stage)) {
-      throw new Error("Esta oportunidad ya está cerrada y no se puede editar.");
+      throw new ConvexError("Esta oportunidad ya está cerrada y no se puede editar.");
     }
     const patch = { editedAt: Date.now(), editedBy: user._id };
     if (name !== undefined) patch.name = requireBoundedText(name, "nombre", 1, 120);
@@ -88,7 +88,7 @@ export const update = mutation({
     if (estimatedAmount !== undefined) patch.estimatedAmount = requireEstimatedAmount(estimatedAmount);
     if (newStage !== undefined) {
       if (!OPPORTUNITY_OPEN_STAGES.includes(newStage)) {
-        throw new Error('Para cerrarla usa "Ganar" o "Marcar perdida", no un cambio de etapa directo.');
+        throw new ConvexError('Para cerrarla usa "Ganar" o "Marcar perdida", no un cambio de etapa directo.');
       }
       patch.stage = newStage;
     }
@@ -104,14 +104,14 @@ export const markLost = mutation({
   handler: async (ctx, { id, lossReason: reason }) => {
     const user = await requireVendedor(ctx);
     const opportunity = await ctx.db.get(id);
-    if (!opportunity) throw new Error("Oportunidad no encontrada.");
+    if (!opportunity) throw new ConvexError("Oportunidad no encontrada.");
     if (opportunity.ownerId !== user._id) {
-      throw new Error("No puedes editar una oportunidad que no es tuya.");
+      throw new ConvexError("No puedes editar una oportunidad que no es tuya.");
     }
     if (!OPPORTUNITY_OPEN_STAGES.includes(opportunity.stage)) {
-      throw new Error("Esta oportunidad ya está cerrada.");
+      throw new ConvexError("Esta oportunidad ya está cerrada.");
     }
-    if (!reason) throw new Error("Selecciona un motivo antes de marcar como perdida.");
+    if (!reason) throw new ConvexError("Selecciona un motivo antes de marcar como perdida.");
     const now = Date.now();
     await ctx.db.patch(id, { stage: "perdida", lossReason: reason, closedAt: now, closedBy: user._id });
     await recordTimelineEvent(ctx, {
@@ -143,24 +143,24 @@ export const win = mutation({
   },
   handler: async (ctx, { id, amount, product, closedDate }) => {
     const opportunity = await ctx.db.get(id);
-    if (!opportunity) throw new Error("Oportunidad no encontrada.");
+    if (!opportunity) throw new ConvexError("Oportunidad no encontrada.");
     const { user } = await requireOwnedProspect(ctx, opportunity.prospectId);
 
     if (!OPPORTUNITY_OPEN_STAGES.includes(opportunity.stage)) {
-      throw new Error("Esta oportunidad ya está cerrada.");
+      throw new ConvexError("Esta oportunidad ya está cerrada.");
     }
     if (opportunity.saleId) {
-      throw new Error("Esta oportunidad ya tiene una venta registrada.");
+      throw new ConvexError("Esta oportunidad ya tiene una venta registrada.");
     }
     const existingSale = await ctx.db
       .query("sales")
       .withIndex("by_opportunity", (q) => q.eq("opportunityId", id))
       .first();
     if (existingSale) {
-      throw new Error("Esta oportunidad ya tiene una venta registrada.");
+      throw new ConvexError("Esta oportunidad ya tiene una venta registrada.");
     }
 
-    if (!amount || amount <= 0) throw new Error("El monto debe ser mayor a 0.");
+    if (!amount || amount <= 0) throw new ConvexError("El monto debe ser mayor a 0.");
     const closedAt = resolveClosedAt(closedDate);
     const cleanProduct = product !== undefined ? requireBoundedText(product, "producto", 1, 120) : opportunity.product;
 

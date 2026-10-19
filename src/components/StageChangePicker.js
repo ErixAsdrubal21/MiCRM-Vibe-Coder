@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/design/components/core/Button.jsx";
 import { STAGES, STAGE_LABELS, LOSS_REASONS } from "@/lib/prospects.js";
+import { errorMessage } from "@/lib/errors.js";
 
 /**
  * Selector de etapa compartido por Ficha (ICS-12) y Pipeline (ICS-14).
@@ -37,7 +38,7 @@ export default function StageChangePicker({ prospect, onChanged, onCancel }) {
       await changeStage({ id: prospect._id, stage });
       onChanged();
     } catch (e) {
-      setError(e.message ?? "No se pudo cambiar la etapa.");
+      setError(errorMessage(e, "No se pudo cambiar la etapa."));
     } finally {
       setSubmitting(false);
     }
@@ -53,7 +54,7 @@ export default function StageChangePicker({ prospect, onChanged, onCancel }) {
       await changeStage({ id: prospect._id, stage: "perdido", lossReason });
       onChanged();
     } catch (e) {
-      setError(e.message ?? "No se pudo cambiar la etapa.");
+      setError(errorMessage(e, "No se pudo cambiar la etapa."));
     } finally {
       setSubmitting(false);
     }

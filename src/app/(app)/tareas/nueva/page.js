@@ -13,6 +13,7 @@ import { useSession, homePathForRole } from "@/lib/session.js";
 import { isActiveStage, contactMetaLabel, daysSinceContact, FOLLOW_UP_TYPES } from "@/lib/prospects.js";
 import { todayISO, plusDaysISO } from "@/lib/dates.js";
 import { prospectoHref } from "@/lib/routes.js";
+import { errorMessage } from "@/lib/errors.js";
 
 /**
  * ICS-92: "Nueva tarea" desde /tareas — agenda un seguimiento eligiendo el
@@ -53,7 +54,7 @@ export default function NuevaTarea() {
       await createFollowUp({ prospectId: selected._id, date: date || plusDaysISO(1), type });
       router.replace(prospectoHref(selected._id));
     } catch (err) {
-      setError(err.message ?? "No se pudo programar el seguimiento.");
+      setError(errorMessage(err, "No se pudo programar el seguimiento."));
       setSubmitting(false);
     }
   }

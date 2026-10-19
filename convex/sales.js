@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireAuthenticatedUser, requireOwnedProspect, requireAdministrador, requireProspectRead } from "./permissions";
 import { recordTimelineEvent, requireBoundedText, resolveClosedAt } from "./lib";
@@ -22,7 +22,7 @@ export const createDirect = mutation({
   },
   handler: async (ctx, { prospectId, amount, product, closedDate }) => {
     const { user, prospect } = await requireOwnedProspect(ctx, prospectId);
-    if (!amount || amount <= 0) throw new Error("El monto debe ser mayor a 0.");
+    if (!amount || amount <= 0) throw new ConvexError("El monto debe ser mayor a 0.");
     const cleanProduct = requireBoundedText(product, "producto", 1, 120);
     const closedAt = resolveClosedAt(closedDate);
     const saleId = await ctx.db.insert("sales", {
@@ -53,8 +53,8 @@ const voidSaleMutation = mutation({
   handler: async (ctx, { id, reason }) => {
     const user = await requireAdministrador(ctx);
     const sale = await ctx.db.get(id);
-    if (!sale) throw new Error("Venta no encontrada.");
-    if (sale.voidedAt) throw new Error("Esta venta ya está anulada.");
+    if (!sale) throw new ConvexError("Venta no encontrada.");
+    if (sale.voidedAt) throw new ConvexError("Esta venta ya está anulada.");
     const cleanReason = requireBoundedText(reason, "motivo", 1, 500);
     const now = Date.now();
     await ctx.db.patch(id, { voidedAt: now, voidedBy: user._id, voidReason: cleanReason });
@@ -146,7 +146,7 @@ export const getById = query({
   args: { id: v.id("sales") },
   handler: async (ctx, { id }) => {
     const sale = await ctx.db.get(id);
-    if (!sale) throw new Error("Venta no encontrada.");
+    if (!sale) throw new ConvexError("Venta no encontrada.");
     await requireProspectRead(ctx, sale.prospectId);
     const [prospect, opportunity] = await Promise.all([
       ctx.db.get(sale.prospectId),

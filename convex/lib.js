@@ -1,5 +1,6 @@
 /** Helpers compartidos entre prospects.js / interactions.js / followUps.js. */
 
+import { ConvexError } from "convex/values";
 import { ACTIVE_STAGE_VALUES, TIMELINE_EVENT_TYPE_VALUES, OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
 
 export const ACTIVE_STAGES = ACTIVE_STAGE_VALUES;
@@ -200,8 +201,8 @@ export function startOfBusinessTodayMs() {
  */
 export function requireBoundedText(value, label, min, max) {
   const trimmed = typeof value === "string" ? value.trim() : "";
-  if (trimmed.length < min) throw new Error(`El ${label} no puede estar vacío.`);
-  if (trimmed.length > max) throw new Error(`El ${label} no puede tener más de ${max} caracteres.`);
+  if (trimmed.length < min) throw new ConvexError(`El ${label} no puede estar vacío.`);
+  if (trimmed.length > max) throw new ConvexError(`El ${label} no puede tener más de ${max} caracteres.`);
   return trimmed;
 }
 
@@ -215,10 +216,10 @@ export function requireBoundedText(value, label, min, max) {
 export function resolveClosedAt(closedDate) {
   if (closedDate === undefined) return Date.now();
   if (!isValidCalendarDate(closedDate)) {
-    throw new Error('Fecha de cierre inválida (usa "YYYY-MM-DD").');
+    throw new ConvexError('Fecha de cierre inválida (usa "YYYY-MM-DD").');
   }
   if (closedDate > businessToday()) {
-    throw new Error("La fecha de cierre no puede ser futura.");
+    throw new ConvexError("La fecha de cierre no puede ser futura.");
   }
   return calendarDateToMs(closedDate);
 }

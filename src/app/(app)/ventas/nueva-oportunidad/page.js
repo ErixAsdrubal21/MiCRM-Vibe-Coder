@@ -11,6 +11,7 @@ import { Badge } from "@/design/components/core/Badge.jsx";
 import { useSession, homePathForRole } from "@/lib/session.js";
 import { todayISO } from "@/lib/dates.js";
 import { prospectoHref } from "@/lib/routes.js";
+import { errorMessage } from "@/lib/errors.js";
 
 const STAGE_CHIPS = [
   { value: "calificacion", label: "Calificación" },
@@ -75,7 +76,7 @@ export default function NuevaOportunidad() {
       });
       router.replace(prospectoHref(selected._id));
     } catch (err) {
-      setError(err.message ?? "No se pudo crear la oportunidad.");
+      setError(errorMessage(err, "No se pudo crear la oportunidad."));
       setSubmitting(false);
     }
   }

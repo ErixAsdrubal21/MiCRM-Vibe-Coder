@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireAuthenticatedUser, requireVendedor, requireProspect, requireOwnedProspect } from "./permissions";
 import {
@@ -172,12 +172,12 @@ export const complete = mutation({
   },
   handler: async (ctx, { id, resolution: res, note, type, nextFollowUp }) => {
     const followUp = await ctx.db.get(id);
-    if (!followUp) throw new Error("Seguimiento no encontrado.");
+    if (!followUp) throw new ConvexError("Seguimiento no encontrado.");
     // ICS-94: aislamiento de cartera — solo el dueño del prospecto cierra su seguimiento.
     const { user, prospect } = await requireOwnedProspect(ctx, followUp.prospectId);
-    if (followUp.status !== "pendiente") throw new Error("El seguimiento ya fue cerrado.");
+    if (followUp.status !== "pendiente") throw new ConvexError("El seguimiento ya fue cerrado.");
     if (res === "reprogramado" && !nextFollowUp) {
-      throw new Error("Para reprogramar el seguimiento necesitas indicar la nueva fecha.");
+      throw new ConvexError("Para reprogramar el seguimiento necesitas indicar la nueva fecha.");
     }
 
     const now = Date.now();
@@ -247,20 +247,20 @@ export const create = mutation({
     const prospect = await requireProspect(ctx, prospectId);
 
     if (prospect.ownerId !== user._id) {
-      throw new Error("No puedes programar seguimientos para un prospecto de otro vendedor.");
+      throw new ConvexError("No puedes programar seguimientos para un prospecto de otro vendedor.");
     }
     if (!isValidCalendarDate(date)) {
-      throw new Error("Fecha inválida.");
+      throw new ConvexError("Fecha inválida.");
     }
     if (date < businessToday()) {
-      throw new Error("No se puede agendar un seguimiento en el pasado.");
+      throw new ConvexError("No se puede agendar un seguimiento en el pasado.");
     }
     if (!isActiveStage(prospect.stage)) {
-      throw new Error("Este prospecto ya está cerrado (ganado/perdido) — no aplica un nuevo seguimiento.");
+      throw new ConvexError("Este prospecto ya está cerrado (ganado/perdido) — no aplica un nuevo seguimiento.");
     }
     const existing = await pendingFollowUp(ctx, prospectId);
     if (existing) {
-      throw new Error(`${prospect.name} ya tiene un seguimiento pendiente. Ábrelo desde su ficha para reprogramarlo.`);
+      throw new ConvexError(`${prospect.name} ya tiene un seguimiento pendiente. Ábrelo desde su ficha para reprogramarlo.`);
     }
 
     await ctx.db.insert("followUps", {

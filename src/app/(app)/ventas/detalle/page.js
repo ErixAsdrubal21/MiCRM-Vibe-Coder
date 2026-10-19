@@ -10,6 +10,7 @@ import { Button } from "@/design/components/core/Button.jsx";
 import { Tag } from "@/design/components/core/Tag.jsx";
 import { useSession } from "@/lib/session.js";
 import "../ventas.css";
+import { errorMessage } from "@/lib/errors.js";
 
 function money(n) {
   return `$${n.toLocaleString("es-MX")}`;
@@ -56,7 +57,7 @@ export default function VentaDetalle() {
       await voidSale({ id, reason: reason.trim() });
       setConfirmingVoid(false);
     } catch (err) {
-      setError(err.message ?? "No se pudo anular la venta.");
+      setError(errorMessage(err, "No se pudo anular la venta."));
     } finally {
       setSubmitting(false);
     }

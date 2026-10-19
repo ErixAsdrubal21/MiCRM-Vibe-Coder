@@ -1,5 +1,5 @@
-// Smoke test de ICS-117/118 (desactivar y reactivar usuarios; permiso de
-// Google por persona) — pantalla, en navegador.
+// Smoke test de ICS-117/118/133 (desactivar y reactivar usuarios; permiso de
+// Google por persona; mensaje de error visible al invitar) — pantalla, en navegador.
 // Sirve out/ aplicando out/_headers (como Cloudflare Pages, con la CSP) y,
 // contra el deployment de DESARROLLO: una administradora desactiva a un
 // vendedor desde Configuración → Equipo mientras el vendedor tiene el CRM
@@ -46,7 +46,9 @@ const submit = (p) => p.$eval("form", (f) => f.requestSubmit());
 async function clickText(p, text) { await waitText(p, text); await p.$$eval("button", (els, t) => els.find((e) => e.innerText.trim() === t).click(), text); }
 async function clickLabel(p, label) { const sel = `button[aria-label="${label}"]`; await p.waitForSelector(sel, { timeout: 30000 }); await p.click(sel); }
 async function login(p, email) {
-  await p.goto(`${BASE}/login`, { waitUntil: "networkidle0" });
+  // "domcontentloaded" + esperar el formulario: con la conexión de Convex abierta, "networkidle" a veces nunca llega.
+  await p.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await p.waitForSelector("#email", { timeout: 30000 });
   await set(p, "#email", email);
   await set(p, "#pass", PASS[email]);
   await submit(p);
@@ -100,6 +102,15 @@ try {
   await login(admin, ADMIN);
   await admin.waitForFunction(() => location.pathname !== "/login", { timeout: 30000 });
   await admin.goto(`${BASE}/configuracion`, { waitUntil: "domcontentloaded" });
+
+  // ICS-133: invitar un correo que ya existe muestra el motivo, no "Server Error"
+  await clickText(admin, "Invitar usuario");
+  await set(admin, "#iu-nombre", "Duplicado");
+  await set(admin, "#iu-correo", VEND);
+  await admin.$eval("#iu-correo", (el) => el.form.requestSubmit());
+  await waitText(admin, "Ya existe una cuenta con ese correo.");
+  check("Invitar un correo existente muestra \"Ya existe una cuenta con ese correo.\"", !(await has(admin, "Server Error")));
+  await clickText(admin, "Cancelar");
 
   // ICS-118: permitir y quitar Google
   await clickLabel(admin, `Permitir Google a ${NAME}`);

@@ -11,6 +11,7 @@ import { Icon } from "@/design/components/core/Icon.jsx";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { useSession } from "@/lib/session.js";
 import "./configuracion.css";
+import { errorMessage } from "@/lib/errors.js";
 
 const ROLE_LABEL = { administrador: "Administradora", vendedor: "Vendedor" };
 const FIELD_INPUT_STYLE = { border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" };
@@ -93,7 +94,7 @@ function ChangePasswordForm({ onDone }) {
       await changeOwnPassword({ currentPassword, newPassword });
       setSuccess(true);
     } catch (err) {
-      setError(err.message ?? "No se pudo cambiar la contraseña.");
+      setError(errorMessage(err, "No se pudo cambiar la contraseña."));
     } finally {
       setSubmitting(false);
     }
@@ -245,7 +246,7 @@ function TeamMemberRow({ member, isSelf }) {
       }
       setConfirming(null);
     } catch (err) {
-      setError(err.message ?? "No se pudo completar la acción.");
+      setError(errorMessage(err, "No se pudo completar la acción."));
     } finally {
       setBusy(false);
     }
@@ -315,7 +316,7 @@ function InviteUserForm({ onDone }) {
       const result = await inviteUser({ email, name, role });
       setTempPassword(result.tempPassword);
     } catch (err) {
-      setError(err.message ?? "No se pudo invitar al usuario.");
+      setError(errorMessage(err, "No se pudo invitar al usuario."));
     } finally {
       setSubmitting(false);
     }
