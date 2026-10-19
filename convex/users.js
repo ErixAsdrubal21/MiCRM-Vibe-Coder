@@ -1,5 +1,5 @@
 import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   createAccount,
   getAuthSessionId,
@@ -68,7 +68,7 @@ export const resetPasswordByEmail = internalAction({
   args: { email: v.string(), newPassword: v.string() },
   handler: async (ctx, { email, newPassword }) => {
     const user = await ctx.runQuery(internal.users.getUserByEmail, { email });
-    if (!user) throw new Error(`No existe ninguna cuenta con el correo ${email}.`);
+    if (!user) throw new ConvexError(`No existe ninguna cuenta con el correo ${email}.`);
     await modifyAccountCredentials(ctx, { provider: "password", account: { id: email, secret: newPassword } });
     await invalidateSessions(ctx, { userId: user._id });
     return "ok";
@@ -93,9 +93,9 @@ export const changeUserEmail = internalMutation({
   handler: async (ctx, { from, to }) => {
     const newEmail = to.trim().toLowerCase();
     const user = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", from)).unique();
-    if (!user) throw new Error(`No existe ninguna cuenta con el correo ${from}.`);
+    if (!user) throw new ConvexError(`No existe ninguna cuenta con el correo ${from}.`);
     const taken = await findUsersByEmailInsensitive(ctx.db, newEmail);
-    if (taken.length > 0) throw new Error(`Ya existe una cuenta con el correo ${newEmail}.`);
+    if (taken.length > 0) throw new ConvexError(`Ya existe una cuenta con el correo ${newEmail}.`);
 
     await ctx.db.patch(user._id, { email: newEmail });
     const passwordAccount = await ctx.db
@@ -147,9 +147,9 @@ export const deactivateUser = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
     const me = await requireAdministrador(ctx);
-    if (userId === me._id) throw new Error("No puedes desactivar tu propia cuenta.");
+    if (userId === me._id) throw new ConvexError("No puedes desactivar tu propia cuenta.");
     const target = await ctx.db.get(userId);
-    if (!target) throw new Error("Usuario no encontrado.");
+    if (!target) throw new ConvexError("Usuario no encontrado.");
     if (target.disabledAt) return null;
 
     if (target.role === "administrador") {
@@ -157,7 +157,7 @@ export const deactivateUser = mutation({
         (u) => u.role === "administrador" && isActiveUser(u),
       );
       if (activeAdmins.filter((u) => u._id !== userId).length === 0) {
-        throw new Error("El CRM debe conservar al menos una administradora activa.");
+        throw new ConvexError("El CRM debe conservar al menos una administradora activa.");
       }
     }
 
@@ -182,7 +182,7 @@ export const reactivateUser = mutation({
   handler: async (ctx, { userId }) => {
     await requireAdministrador(ctx);
     const target = await ctx.db.get(userId);
-    if (!target) throw new Error("Usuario no encontrado.");
+    if (!target) throw new ConvexError("Usuario no encontrado.");
     if (target.disabledAt) await ctx.db.patch(userId, { disabledAt: undefined });
     return null;
   },
@@ -203,9 +203,9 @@ export const setGoogleAllowed = mutation({
   handler: async (ctx, { userId, allowed }) => {
     const me = await requireAdministrador(ctx);
     const target = await ctx.db.get(userId);
-    if (!target) throw new Error("Usuario no encontrado.");
+    if (!target) throw new ConvexError("Usuario no encontrado.");
     if (allowed) {
-      if (!isActiveUser(target)) throw new Error("Esa cuenta está desactivada. Reactívala antes de permitirle Google.");
+      if (!isActiveUser(target)) throw new ConvexError("Esa cuenta está desactivada. Reactívala antes de permitirle Google.");
       await ctx.db.patch(userId, { googleAllowed: true });
       return null;
     }
@@ -224,10 +224,10 @@ export const setGoogleAllowedByEmail = internalMutation({
   args: { email: v.string(), allowed: v.boolean() },
   handler: async (ctx, { email, allowed }) => {
     const matches = await findUsersByEmailInsensitive(ctx.db, email);
-    if (matches.length !== 1) throw new Error(`Se esperaba exactamente una cuenta con el correo ${email}; hay ${matches.length}.`);
+    if (matches.length !== 1) throw new ConvexError(`Se esperaba exactamente una cuenta con el correo ${email}; hay ${matches.length}.`);
     const user = matches[0];
     if (allowed) {
-      if (!isActiveUser(user)) throw new Error(`La cuenta ${email} está desactivada.`);
+      if (!isActiveUser(user)) throw new ConvexError(`La cuenta ${email} está desactivada.`);
       await ctx.db.patch(user._id, { googleAllowed: true });
     } else {
       await unlinkGoogle(ctx.db, user._id);
@@ -256,7 +256,7 @@ export const createPendingUserRow = internalMutation({
   args: { email: v.string(), name: v.string(), role },
   handler: async (ctx, { email, name, role: userRole }) => {
     const existing = await findUsersByEmailInsensitive(ctx.db, email);
-    if (existing.length > 0) throw new Error("Ya existe una cuenta con ese correo.");
+    if (existing.length > 0) throw new ConvexError("Ya existe una cuenta con ese correo.");
     return ctx.db.insert("users", { email, name, role: userRole });
   },
 });
@@ -292,13 +292,13 @@ export const inviteUser = action({
   handler: async (ctx, { email, name, role: userRole }) => {
     const me = await ctx.runQuery(api.users.currentUser, {});
     if (!me || me.role !== "administrador") {
-      throw new Error("Solo un administrador puede invitar usuarios.");
+      throw new ConvexError("Solo un administrador puede invitar usuarios.");
     }
 
     const trimmedEmail = email.trim();
     const trimmedName = name.trim();
     if (!trimmedEmail || !trimmedName) {
-      throw new Error("Correo y nombre son obligatorios.");
+      throw new ConvexError("Correo y nombre son obligatorios.");
     }
 
     const newUserId = await ctx.runMutation(internal.users.createPendingUserRow, {
@@ -342,16 +342,16 @@ export const changeOwnPassword = action({
   args: { currentPassword: v.string(), newPassword: v.string() },
   handler: async (ctx, { currentPassword, newPassword }) => {
     const me = await ctx.runQuery(api.users.currentUser, {});
-    if (!me) throw new Error("No autenticado.");
-    if (!me.email) throw new Error("Tu cuenta no tiene un correo asociado.");
+    if (!me) throw new ConvexError("No autenticado.");
+    if (!me.email) throw new ConvexError("Tu cuenta no tiene un correo asociado.");
     if (newPassword.length < 8) {
-      throw new Error("La nueva contraseña debe tener al menos 8 caracteres.");
+      throw new ConvexError("La nueva contraseña debe tener al menos 8 caracteres.");
     }
 
     try {
       await retrieveAccount(ctx, { provider: "password", account: { id: me.email, secret: currentPassword } });
     } catch {
-      throw new Error("La contraseña actual no es correcta.");
+      throw new ConvexError("La contraseña actual no es correcta.");
     }
 
     await modifyAccountCredentials(ctx, { provider: "password", account: { id: me.email, secret: newPassword } });
@@ -394,13 +394,13 @@ export const resetUserPassword = action({
   handler: async (ctx, { userId }) => {
     const me = await ctx.runQuery(api.users.currentUser, {});
     if (!me || me.role !== "administrador") {
-      throw new Error("Solo un administrador puede restablecer contraseñas.");
+      throw new ConvexError("Solo un administrador puede restablecer contraseñas.");
     }
 
     const target = await ctx.runQuery(internal.users.getUserById, { userId });
-    if (!target) throw new Error("Usuario no encontrado.");
-    if (!target.email) throw new Error("Ese usuario no tiene correo asociado.");
-    if (target.disabledAt) throw new Error("Esa cuenta está desactivada. Reactívala antes de restablecer su contraseña.");
+    if (!target) throw new ConvexError("Usuario no encontrado.");
+    if (!target.email) throw new ConvexError("Ese usuario no tiene correo asociado.");
+    if (target.disabledAt) throw new ConvexError("Esa cuenta está desactivada. Reactívala antes de restablecer su contraseña.");
 
     // ICS-118: restablecer desde administración también quita Google (primero,
     // para que una falla a medio camino deje la cuenta más cerrada, no menos).

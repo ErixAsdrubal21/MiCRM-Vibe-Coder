@@ -85,6 +85,7 @@ if (!REMOTE) await new Promise((r) => server.listen(PORT, r));
 await new Promise((r) => evil.listen(EVIL_PORT, r));
 
 let browser;
+let step = "inicio";
 const violations = [];
 const errors = [];
 async function watch(p) {
@@ -95,6 +96,10 @@ async function watch(p) {
   });
   p.on("console", (m) => { if (/Content Security Policy|Refused to/i.test(m.text())) violations.push(`consola: ${m.text()}`); });
   p.on("pageerror", (e) => errors.push(e.message));
+  // Convex muestra "¿Salir del sitio?" (beforeunload) si se abandona la página con una petición en
+  // curso, p. ej. justo después del login. En el navegador sin pantalla ese diálogo congela la
+  // página; una persona lo vería y respondería. Se acepta solo.
+  p.on("dialog", (d) => d.accept());
 }
 
 /** Cabeceras que de verdad recibe el navegador en esa ruta. */
@@ -133,26 +138,37 @@ try {
   run("users:provisionPassword", { email: EMAIL, password: PASS });
   browser = await puppeteer.launch({ executablePath: CHROME, headless: true });
 
+  step = "1. login y rutas";
   // 1. Login con contraseña y recorrido de todas las rutas.
   const p = await browser.newPage();
   await watch(p);
-  await p.goto(`${BASE}/login`, { waitUntil: "networkidle0" });
+  await p.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await p.waitForSelector("#email", { timeout: 30000 });
   await set(p, "#email", EMAIL);
   await set(p, "#pass", PASS);
   await submit(p);
-  await p.waitForFunction(() => location.pathname !== "/login", { timeout: 30000 });
+  // Esperar a que termine la redirección del inicio (/ → /dashboard de la administradora):
+  // navegar mientras la app redirige choca con esa navegación y se atora.
+  await p.waitForFunction(() => location.pathname === "/dashboard", { timeout: 30000 });
   check("Login con contraseña funciona con la CSP", true, await p.evaluate(() => location.pathname));
   for (const route of routes.filter((r) => r !== "/login")) {
-    await p.goto(`${BASE}${route}`, { waitUntil: "networkidle2" });
-    await sleep(1500);
+    // Navegar como un usuario y esperar a que la ruta cargue. `page.goto` a veces se atora:
+    // varias pantallas ajustan su URL con `router.replace` al abrir y Puppeteer pierde la cuenta
+    // de la navegación (y con la conexión de Convex abierta, "networkidle" a veces nunca llega).
+    step = `1. ruta ${route}`;
+    await p.evaluate((url) => { location.href = url; }, `${BASE}${route}`);
+    await p.waitForFunction((r) => location.pathname === r && document.readyState === "complete", { timeout: 30000 }, route);
+    await sleep(2500);
   }
   check("Recorrido de todas las rutas con sesión", true, `${routes.length - 1} rutas`);
   check("La app recibe datos de Convex (WebSocket permitido)", await p.evaluate(() => document.body.innerText.trim().length > 0 && !document.body.innerText.includes("No autenticado")));
 
+  step = "2. recuperación";
   // 2. Recuperación de contraseña: pantalla 1 → 2 (llama a passwordReset.request).
   const p2 = await (await browser.createBrowserContext()).newPage();
   await watch(p2);
-  await p2.goto(`${BASE}/login`, { waitUntil: "networkidle0" });
+  await p2.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await p2.waitForSelector("#email", { timeout: 30000 });
   await set(p2, "#email", EMAIL);
   await click(p2, "Olvidé mi contraseña");
   await waitText(p2, "Recupera tu contraseña");
@@ -160,14 +176,17 @@ try {
   await waitText(p2, "Escribe tu código");
   check("Recuperación: pide el código con la CSP", true);
 
+  step = "3. Google";
   // 3. Google: el botón debe sacar al navegador hacia accounts.google.com.
   const p3 = await (await browser.createBrowserContext()).newPage();
   await watch(p3);
-  await p3.goto(`${BASE}/login`, { waitUntil: "networkidle0" });
+  await p3.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await p3.waitForSelector("#email", { timeout: 30000 });
   const toGoogle = p3.waitForRequest((r) => r.url().startsWith("https://accounts.google.com/"), { timeout: 30000 });
   await click(p3, "Continuar con Google");
   check("Google: la redirección llega a accounts.google.com", Boolean(await toGoogle));
 
+  step = "4. iframe";
   // 4. Clickjacking: otro origen no puede mostrar el CRM en un iframe.
   const p4 = await (await browser.createBrowserContext()).newPage();
   await p4.goto(`http://localhost:${EVIL_PORT}/`, { waitUntil: "networkidle0" });
@@ -180,7 +199,7 @@ try {
   check("Sin errores de JavaScript", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (e) {
   failures++;
-  console.log(`✘ Error en la prueba: ${e.message}`);
+  console.log(`✘ Error en la prueba (paso ${step}): ${e.message}`);
   if (violations.length) console.log("  Violaciones:", [...new Set(violations)].slice(0, 5).join(" | "));
 } finally {
   if (browser) await browser.close();

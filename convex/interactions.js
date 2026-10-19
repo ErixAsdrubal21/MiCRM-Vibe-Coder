@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { requireVendedor, requireOwnedProspect, requireAuthenticatedUser } from "./permissions";
 import { isActiveStage, pendingFollowUp, recordTimelineEvent, businessToday, calendarDateToMs, isValidCalendarDate } from "./lib";
@@ -31,7 +31,7 @@ const MAX_BACKDATE_MS = 365 * 24 * 60 * 60 * 1000;
 /** Nota no vacía tras trim, o error. Devuelve la nota tal cual la mandó el usuario. */
 function requireNote(note) {
   if (typeof note !== "string" || note.trim() === "") {
-    throw new Error("La nota de la interacción no puede estar vacía.");
+    throw new ConvexError("La nota de la interacción no puede estar vacía.");
   }
   return note;
 }
@@ -41,10 +41,10 @@ function resolveAt(at) {
   if (at === undefined) return Date.now();
   const now = Date.now();
   if (at > now + FUTURE_TOLERANCE_MS) {
-    throw new Error("La fecha no puede ser futura.");
+    throw new ConvexError("La fecha no puede ser futura.");
   }
   if (at < now - MAX_BACKDATE_MS) {
-    throw new Error("La fecha es demasiado antigua (máx. 1 año).");
+    throw new ConvexError("La fecha es demasiado antigua (máx. 1 año).");
   }
   return at;
 }
@@ -72,14 +72,14 @@ export const add = mutation({
     const interactionAt = resolveAt(at);
 
     if (isActiveStage(prospect.stage) && !nextFollowUp) {
-      throw new Error("Todo prospecto activo necesita una fecha de próximo seguimiento (ICS-16).");
+      throw new ConvexError("Todo prospecto activo necesita una fecha de próximo seguimiento (ICS-16).");
     }
     if (nextFollowUp) {
       if (!isValidCalendarDate(nextFollowUp.date)) {
-        throw new Error("Fecha de próximo seguimiento inválida.");
+        throw new ConvexError("Fecha de próximo seguimiento inválida.");
       }
       if (nextFollowUp.date < businessToday()) {
-        throw new Error("La fecha de próximo seguimiento no puede ser en el pasado.");
+        throw new ConvexError("La fecha de próximo seguimiento no puede ser en el pasado.");
       }
     }
 
@@ -147,12 +147,12 @@ export const edit = mutation({
   handler: async (ctx, { id, note, type, outcome: outcomeArg, at }) => {
     const user = await requireVendedor(ctx);
     const interaction = await ctx.db.get(id);
-    if (!interaction) throw new Error("Interacción no encontrada.");
+    if (!interaction) throw new ConvexError("Interacción no encontrada.");
     if (interaction.registeredBy !== user._id) {
-      throw new Error("Solo puedes editar interacciones que tú registraste.");
+      throw new ConvexError("Solo puedes editar interacciones que tú registraste.");
     }
     if (interaction.deletedAt) {
-      throw new Error("La interacción ya fue eliminada.");
+      throw new ConvexError("La interacción ya fue eliminada.");
     }
 
     const patch = { editedAt: Date.now(), editedBy: user._id };
@@ -186,12 +186,12 @@ export const remove = mutation({
   handler: async (ctx, { id }) => {
     const user = await requireVendedor(ctx);
     const interaction = await ctx.db.get(id);
-    if (!interaction) throw new Error("Interacción no encontrada.");
+    if (!interaction) throw new ConvexError("Interacción no encontrada.");
     if (interaction.registeredBy !== user._id) {
-      throw new Error("Solo puedes eliminar interacciones que tú registraste.");
+      throw new ConvexError("Solo puedes eliminar interacciones que tú registraste.");
     }
     if (interaction.deletedAt) {
-      throw new Error("La interacción ya fue eliminada.");
+      throw new ConvexError("La interacción ya fue eliminada.");
     }
     await ctx.db.patch(id, { deletedAt: Date.now(), deletedBy: user._id });
     return { ok: true };

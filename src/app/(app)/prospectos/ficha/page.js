@@ -16,6 +16,7 @@ import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
 import StageChangePicker from "@/components/StageChangePicker.js";
 import "./ficha.css";
 import { interaccionHref, ventaHref } from "@/lib/routes.js";
+import { errorMessage } from "@/lib/errors.js";
 
 const CHANNEL_LABEL_BY_VALUE = Object.fromEntries(CHANNELS.map((c) => [c.value, c.label]));
 const OUTCOME_TAG_VARIANT = { positivo: "success", negativo: "risk", neutro: "neutral", "sin-respuesta": "neutral" };
@@ -135,7 +136,7 @@ export default function FichaProspecto() {
       await updateProspect({ id: prospect._id, ...draft });
       setEditing(false);
     } catch (err) {
-      setError(err.message ?? "No se pudo guardar.");
+      setError(errorMessage(err, "No se pudo guardar."));
     } finally {
       setSubmitting(false);
     }
@@ -161,7 +162,7 @@ export default function FichaProspecto() {
       });
       setEditingEventId(null);
     } catch (err) {
-      setEditError(err.message ?? "No se pudo guardar.");
+      setEditError(errorMessage(err, "No se pudo guardar."));
     } finally {
       setEditBusy(false);
     }
@@ -173,7 +174,7 @@ export default function FichaProspecto() {
       await removeInteraction({ id: interactionId });
       setConfirmingDeleteId(null);
     } catch (err) {
-      setEditError(err.message ?? "No se pudo eliminar.");
+      setEditError(errorMessage(err, "No se pudo eliminar."));
       setConfirmingDeleteId(null);
     } finally {
       setDeleteBusy(false);
@@ -186,7 +187,7 @@ export default function FichaProspecto() {
     try {
       await completeFollowUp({ id: prospect.nextFollowUp._id, resolution: "hecho" });
     } catch (err) {
-      setFollowUpError(err.message ?? "No se pudo completar el seguimiento.");
+      setFollowUpError(errorMessage(err, "No se pudo completar el seguimiento."));
     } finally {
       setFollowUpBusy(false);
     }
@@ -206,7 +207,7 @@ export default function FichaProspecto() {
       setReprogramming(false);
       setReprogramDate("");
     } catch (err) {
-      setFollowUpError(err.message ?? "No se pudo reprogramar.");
+      setFollowUpError(errorMessage(err, "No se pudo reprogramar."));
     } finally {
       setFollowUpBusy(false);
     }
@@ -407,7 +408,7 @@ export default function FichaProspecto() {
                   });
                   setOppAction(null);
                 } catch (err) {
-                  setOppError(err.message ?? "No se pudo guardar.");
+                  setOppError(errorMessage(err, "No se pudo guardar."));
                 } finally {
                   setOppBusy(false);
                 }
@@ -420,7 +421,7 @@ export default function FichaProspecto() {
                   await winOpportunity({ id: o._id, amount: Number(oppDraft.amount), closedDate: oppDraft.closedDate || undefined });
                   setOppAction(null);
                 } catch (err) {
-                  setOppError(err.message ?? "No se pudo registrar la venta.");
+                  setOppError(errorMessage(err, "No se pudo registrar la venta."));
                 } finally {
                   setOppBusy(false);
                 }
@@ -433,7 +434,7 @@ export default function FichaProspecto() {
                   await markOpportunityLost({ id: o._id, lossReason: oppDraft.lossReason });
                   setOppAction(null);
                 } catch (err) {
-                  setOppError(err.message ?? "No se pudo marcar como perdida.");
+                  setOppError(errorMessage(err, "No se pudo marcar como perdida."));
                 } finally {
                   setOppBusy(false);
                 }

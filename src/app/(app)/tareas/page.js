@@ -12,6 +12,7 @@ import { Icon } from "@/design/components/core/Icon.jsx";
 import { useSession } from "@/lib/session.js";
 import { contactTypeLabel, CONTACT_ICON } from "@/lib/prospects.js";
 import { prospectoHref } from "@/lib/routes.js";
+import { errorMessage } from "@/lib/errors.js";
 
 export default function TareasDelDia() {
   const session = useSession();
@@ -31,7 +32,7 @@ export default function TareasDelDia() {
     try {
       await completeFollowUp({ id: followUpId, resolution: "hecho" });
     } catch (err) {
-      setError(err.message ?? "No se pudo completar la tarea.");
+      setError(errorMessage(err, "No se pudo completar la tarea."));
     } finally {
       setCompletingId(null);
     }

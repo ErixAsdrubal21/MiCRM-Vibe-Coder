@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireAuthenticatedUser, requireVendedor, requireOwnedProspect } from "./permissions";
 import { lastContactAt, pendingFollowUp, recordTimelineEvent } from "./lib";
 import { channel, stage, lossReason } from "./validators.js";
@@ -211,7 +211,7 @@ export const changeStage = mutation({
     const { user, prospect } = await requireOwnedProspect(ctx, id);
     const fromStage = prospect.stage;
     if (newStage === "perdido" && !reason) {
-      throw new Error("Selecciona un motivo antes de marcar como perdido (ICS-17).");
+      throw new ConvexError("Selecciona un motivo antes de marcar como perdido (ICS-17).");
     }
     const now = Date.now();
     await ctx.db.patch(id, {
