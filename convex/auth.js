@@ -3,6 +3,7 @@ import Google from "@auth/core/providers/google";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { findUsersByEmailInsensitive } from "./lib.js";
 import { isActiveUser } from "./permissions.js";
+import { internal } from "./_generated/api.js";
 
 /**
  * ICS-108 — acceso con Google, solo para cuentas ya aprovisionadas.
@@ -15,23 +16,48 @@ import { isActiveUser } from "./permissions.js";
  * cualquiera podría poner en una cuenta de Google un correo ajeno y quedar
  * vinculado a la fila de `users` de esa persona.
  *
+ * ICS-119 — además, Google tiene que ser la autoridad sobre ese correo:
+ * - una cuenta personal de Gmail (`@gmail.com` / `@googlemail.com`, sin `hd`), o
+ * - una cuenta de Google Workspace cuyo dominio (`hd`) esté en la lista
+ *   `GOOGLE_ALLOWED_HD` del entorno de Convex (separada por comas; hoy
+ *   `icsaab.com`).
+ * Una cuenta de Google creada con un correo de otro dominio (sin `hd`) se
+ * rechaza: `email_verified` solo dice que alguna vez se verificó ese buzón,
+ * no que la persona lo siga controlando. Sin la variable, solo entra Gmail.
+ * Se revisa en cada inicio de sesión, no solo en la primera vinculación.
+ * Referencia: https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
+ *
  * Credenciales: `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` en el entorno de
  * Convex. URI de redirección en Google Cloud:
  * `https://<deployment>.convex.site/api/auth/callback/google`.
  */
-export function googleProfileOrReject(googleProfile) {
+const CONSUMER_GOOGLE_DOMAINS = ["gmail.com", "googlemail.com"];
+
+export function allowedWorkspaceDomains(raw = process.env.GOOGLE_ALLOWED_HD) {
+  return (raw ?? "").split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
+}
+
+export function googleProfileOrReject(googleProfile, allowedDomains = allowedWorkspaceDomains()) {
   if (googleProfile.email_verified !== true) {
     throw new Error("El correo de Google no está verificado.");
   }
+  const email = googleProfile.email.trim().toLowerCase();
+  const hd = googleProfile.hd?.trim().toLowerCase();
+  const personalGmail = !hd && CONSUMER_GOOGLE_DOMAINS.includes(email.split("@")[1]);
+  const authorizedWorkspace = Boolean(hd) && allowedDomains.includes(hd);
+  if (!personalGmail && !authorizedWorkspace) {
+    throw new Error("Esta cuenta de Google no es de Gmail ni de un dominio de empresa autorizado.");
+  }
   return {
     id: googleProfile.sub,
-    email: googleProfile.email.trim().toLowerCase(),
+    email,
     name: googleProfile.name,
     image: googleProfile.picture,
   };
 }
 
-const GoogleProvisionedOnly = Google({ profile: googleProfileOrReject });
+// `profile` recibe (perfil, tokens): se envuelve para que los tokens no se tomen como la lista de dominios.
+const GoogleProvisionedOnly = Google({ profile: (googleProfile) => googleProfileOrReject(googleProfile) });
 
 /**
  * Seguridad real (ICS-6/7/8, reemplaza el login mock): sin registro público.
@@ -100,7 +126,13 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   ],
   callbacks: {
     async createOrUpdateUser(ctx, { existingUserId, type, profile }) {
-      return resolveSignInUser(ctx.db, { existingUserId, type, email: profile.email });
+      const userId = await resolveSignInUser(ctx.db, { existingUserId, type, email: profile.email });
+      // ICS-119: vinculación nueva de Google → aviso por correo. Se agenda en la
+      // misma transacción: si el login no termina, no se envía.
+      if (type === "oauth" && !existingUserId) {
+        await ctx.scheduler.runAfter(0, internal.users.sendGoogleLinkedNotice, { userId });
+      }
+      return userId;
     },
     // ICS-117 — el login con contraseña no pasa por `createOrUpdateUser`; este
     // callback corre antes de crear CUALQUIER sesión, sea cual sea el proveedor.

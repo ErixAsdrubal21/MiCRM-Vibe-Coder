@@ -8,6 +8,9 @@
 // Desde ICS-118 la cuenta además necesita `googleAllowed`: se comprueba que
 // sin él se rechaza, se permite con users:setGoogleAllowedByEmail y, al
 // final, que quitarlo rechaza también la vinculación ya existente.
+// ICS-119: la regla de dominios (Gmail o Workspace autorizado) se prueba con
+// `googleProfileOrReject` y una lista explícita; el aviso por correo de una
+// vinculación nueva, con los trabajos agendados (testHelpers:countSmokeGoogleNotices).
 //
 // USO (contra el deployment de DESARROLLO; `npx convex run` usa el de
 // .env.local — nunca correr con --prod):
@@ -99,14 +102,24 @@ try {
   })());
   check(
     "Perfil verificado normaliza el correo a minúsculas",
-    googleProfileOrReject({ sub: "x", email: " Ana@B.com ", email_verified: true }).email === "ana@b.com",
+    googleProfileOrReject({ sub: "x", email: " Ana@Gmail.com ", email_verified: true }, []).email === "ana@gmail.com",
   );
+
+  // ICS-119: dominios
+  const accepts = (profile, domains) => { try { googleProfileOrReject({ sub: "x", email_verified: true, ...profile }, domains); return true; } catch { return false; } };
+  check("ICS-119: Gmail personal se acepta", accepts({ email: "ana@gmail.com" }, []));
+  check("ICS-119: Workspace con dominio autorizado se acepta", accepts({ email: "esalas@icsaab.com", hd: "icsaab.com" }, ["icsaab.com"]));
+  check("ICS-119: Workspace de un dominio no autorizado se rechaza", !accepts({ email: "ana@otra.com", hd: "otra.com" }, ["icsaab.com"]));
+  check("ICS-119: cuenta de Google con correo de otro dominio y sin hd se rechaza", !accepts({ email: "esalas@icsaab.com" }, ["icsaab.com"]));
+  check("ICS-119: sin lista de dominios, Workspace se rechaza (solo Gmail)", !accepts({ email: "esalas@icsaab.com", hd: "icsaab.com" }, []));
+  check("ICS-119: un hd falso no convierte en Gmail", !accepts({ email: "ana@gmail.com", hd: "otra.com" }, ["icsaab.com"]));
 
   // M1: invitado con mayúsculas (flujo real de inviteUser) entra con Google en minúsculas
   const invitedId = run("users:createPendingUserRow", { email: INVITED, name: "[SMOKE ICS-108]", role: "vendedor" });
   run("users:provisionPassword", { email: INVITED, password });
   check("ICS-118: sin permiso de Google, el regreso de Google se rechaza", googleRejected(INVITED.toLowerCase(), "smoke-sub-persona"));
   check("…y no crea la vinculación", !byEmail(INVITED)?.accounts.some((a) => a.startsWith("google:")));
+  check("ICS-119: un login rechazado no agenda aviso", run("testHelpers:countSmokeGoogleNotices", { email: INVITED }) === 0);
   run("users:setGoogleAllowedByEmail", { email: INVITED, allowed: true });
   const googleUserId = googleSignIn(INVITED.toLowerCase(), "smoke-sub-persona");
   check("Google en minúsculas vincula al invitado con mayúsculas", googleUserId === invitedId, `${googleUserId} vs ${invitedId}`);
@@ -117,7 +130,9 @@ try {
     persona?.accounts.includes(`password:${INVITED}`) && persona?.accounts.includes("google:smoke-sub-persona") && persona?.sessions >= 1,
     JSON.stringify(persona),
   );
+  check("ICS-119: la vinculación nueva agenda un aviso por correo", run("testHelpers:countSmokeGoogleNotices", { email: INVITED }) === 1);
   check("Segundo login con Google reutiliza la vinculación", googleSignIn(INVITED.toLowerCase(), "smoke-sub-persona") === invitedId);
+  check("ICS-119: …y no vuelve a enviar el aviso", run("testHelpers:countSmokeGoogleNotices", { email: INVITED }) === 1);
 
   // No autorizado
   check("Correo no aprovisionado se rechaza", googleRejected("smoke-ics108-nadie@example.com", "smoke-sub-nadie"));
