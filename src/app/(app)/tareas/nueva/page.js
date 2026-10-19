@@ -23,7 +23,8 @@ import { errorMessage } from "@/lib/errors.js";
 export default function NuevaTarea() {
   const router = useRouter();
   const session = useSession();
-  const prospectsData = useQuery(api.prospects.listMine);
+  // ICS-132: listMine es solo para vendedores; para otro rol no se pide (la página lo redirige a su inicio).
+  const prospectsData = useQuery(api.prospects.listMine, session?.role === "vendedor" ? {} : "skip");
   const createFollowUp = useMutation(api.followUps.create);
 
   const [query, setQuery] = useState("");
