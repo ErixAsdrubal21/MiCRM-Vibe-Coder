@@ -1,9 +1,11 @@
-// Smoke test de ICS-117 (desactivar y reactivar usuarios) — pantalla, en navegador.
+// Smoke test de ICS-117/118 (desactivar y reactivar usuarios; permiso de
+// Google por persona) — pantalla, en navegador.
 // Sirve out/ aplicando out/_headers (como Cloudflare Pages, con la CSP) y,
 // contra el deployment de DESARROLLO: una administradora desactiva a un
 // vendedor desde Configuración → Equipo mientras el vendedor tiene el CRM
 // abierto en otro navegador (lo saca al login), intenta entrar desactivado y
-// después lo reactiva.
+// después lo reactiva. Antes, le permite y le quita el acceso con Google
+// (ICS-118), también con el CRM abierto.
 //
 // USO
 //   npm run build                                  # out/ con la URL de dev de .env.local
@@ -31,7 +33,8 @@ const BASE = `http://localhost:${PORT}`;
 const ADMIN = "delivered+ics117ui-admin@resend.dev";
 const VEND = "delivered+ics117ui@resend.dev";
 const PASS = { [ADMIN]: randomBytes(12).toString("base64url"), [VEND]: randomBytes(12).toString("base64url") };
-const NAME = "[SMOKE ICS-108]"; // nombre que pone testHelpers:insertSmokeAuthUser
+const NAME = "Vendedor Smoke ICS117";
+const ADMIN_NAME = "Admin Smoke ICS117";
 
 let failures = 0;
 const check = (l, ok, d = "") => { console.log(`${ok ? "✔" : "✘"} ${l}${d ? ` — ${d}` : ""}`); if (!ok) failures++; };
@@ -77,8 +80,8 @@ const pages = {};
 const problems = [];
 try {
   run("testHelpers:deleteSmokeAuthUsers");
-  run("testHelpers:insertSmokeAuthUser", { email: ADMIN, role: "administrador" });
-  run("testHelpers:insertSmokeAuthUser", { email: VEND, role: "vendedor" });
+  run("users:createPendingUserRow", { email: ADMIN, name: ADMIN_NAME, role: "administrador" });
+  run("users:createPendingUserRow", { email: VEND, name: NAME, role: "vendedor" });
   for (const email of [ADMIN, VEND]) run("users:provisionPassword", { email, password: PASS[email] });
   browser = await puppeteer.launch({ executablePath: CHROME, headless: true });
 
@@ -97,16 +100,33 @@ try {
   await login(admin, ADMIN);
   await admin.waitForFunction(() => location.pathname !== "/login", { timeout: 30000 });
   await admin.goto(`${BASE}/configuracion`, { waitUntil: "domcontentloaded" });
+
+  // ICS-118: permitir y quitar Google
+  await clickLabel(admin, `Permitir Google a ${NAME}`);
+  await waitText(admin, `¿Permitir que ${NAME} entre con Google?`);
+  await clickText(admin, "Sí, permitir");
+  await waitText(admin, "Vendedor · Google permitido");
+  check("Permitir Google: la fila muestra \"Google permitido\"", true);
+  check("La administradora también tiene el botón de Google en su propia fila",
+    Boolean(await admin.$(`button[aria-label="Permitir Google a ${ADMIN_NAME}"]`)));
+  await clickLabel(admin, `Quitar Google a ${NAME}`);
+  await waitText(admin, `¿Quitar el acceso con Google a ${NAME}?`);
+  await clickText(admin, "Sí, quitar");
+  await admin.waitForFunction(() => !document.body.innerText.includes("Google permitido"), { timeout: 30000 });
+  check("Quitar Google: desaparece la marca", true);
+  await vend.waitForFunction(() => location.pathname === "/login", { timeout: 30000 });
+  check("Quitar Google cierra la sesión abierta del vendedor (lo saca al login)", true);
+  await login(vend, VEND);
+  await vend.waitForFunction(() => location.pathname === "/tareas", { timeout: 30000 });
+
   await clickLabel(admin, `Desactivar a ${NAME}`);
   await waitText(admin, `¿Desactivar a ${NAME}?`);
   check("Pide confirmación explicando qué pasa", await has(admin, "Se cerrarán sus sesiones y no podrá entrar. Sus datos se conservan."));
   await clickText(admin, "Sí, desactivar");
   await waitText(admin, "Vendedor · Desactivada");
   check("La fila queda marcada como desactivada", true);
-  // Las dos cuentas de prueba se llaman igual; el vendedor ya está desactivado, así que
-  // un botón "Desactivar a [SMOKE ICS-108]" solo podría ser el de su propia fila.
   check("La administradora no tiene botón para desactivarse a sí misma",
-    (await admin.$$eval(`button[aria-label="Desactivar a ${NAME}"]`, (els) => els.length)) === 0);
+    !(await admin.$(`button[aria-label="Desactivar a ${ADMIN_NAME}"]`)));
 
   await vend.waitForFunction(() => location.pathname === "/login", { timeout: 30000 });
   check("Al vendedor lo saca al login en cuanto se desactiva", true);

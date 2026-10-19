@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { Scrypt } from "lucia";
 import { findUsersByEmailInsensitive } from "./lib.js";
 import { isActiveUser } from "./permissions.js";
+import { deleteUserSessions, unlinkGoogle } from "./access.js";
 import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from "./email.js";
 
 /**
@@ -26,8 +27,9 @@ import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from
  *    serializables, así que solicitudes simultáneas no se saltan el límite.
  * 3. `confirm(email, code, newPassword)` — una sola transacción: valida el
  *    código (hash, vigencia, 5 intentos, un solo uso), cambia la contraseña,
- *    cierra todas las sesiones y agenda el aviso. Todo o nada. Cualquier
- *    código inválido da la misma respuesta, exista o no la cuenta.
+ *    cierra todas las sesiones, quita Google (ICS-118) y agenda el aviso.
+ *    Todo o nada. Cualquier código inválido da la misma respuesta, exista o
+ *    no la cuenta.
  */
 
 const CODE_MINUTES = 15;
@@ -163,19 +165,12 @@ export const confirm = mutation({
 
     await ctx.db.patch(account._id, { secret: await new Scrypt().hash(newPassword) });
     failpoint("after_password_change");
-    const sessions = await ctx.db
-      .query("authSessions")
-      .withIndex("userId", (q) => q.eq("userId", user._id))
-      .collect();
-    for (const session of sessions) {
-      const tokens = await ctx.db
-        .query("authRefreshTokens")
-        .withIndex("sessionId", (q) => q.eq("sessionId", session._id))
-        .collect();
-      for (const token of tokens) await ctx.db.delete(token._id);
-      await ctx.db.delete(session._id);
-    }
+    await deleteUserSessions(ctx.db, user._id);
     failpoint("after_sessions_revoked");
+    // ICS-118: quien recupera la contraseña por código pierde también Google
+    // (si el correo o la cuenta de Google estaban comprometidos, no basta con
+    // cambiar la contraseña). Una administradora puede volver a permitirlo.
+    await unlinkGoogle(ctx.db, user._id);
     await ctx.db.delete(row._id); // un solo uso
     // El aviso solo se agenda si la transacción se confirma; si el correo falla después, el cambio ya quedó hecho.
     await ctx.scheduler.runAfter(0, internal.passwordReset.sendChangedNotice, { to: user.email });
