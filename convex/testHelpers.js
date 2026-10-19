@@ -417,3 +417,15 @@ export const smokeResolveSignInUser = internalMutation({
     }
   },
 });
+
+/** ICS-119 — avisos de "se vinculó Google" agendados para una fila de prueba. */
+export const countSmokeGoogleNotices = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    requireSmokeAuthEmail(email);
+    const user = (await ctx.db.query("users").collect()).find((u) => u.email?.toLowerCase() === email.toLowerCase());
+    if (!user) return 0;
+    const jobs = await ctx.db.system.query("_scheduled_functions").collect();
+    return jobs.filter((j) => j.name.includes("sendGoogleLinkedNotice") && j.args[0]?.userId === user._id).length;
+  },
+});

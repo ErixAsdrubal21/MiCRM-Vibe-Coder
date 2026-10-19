@@ -11,6 +11,7 @@ import { api, internal } from "./_generated/api";
 import { getActiveUserId, isActiveUser, requireAdministrador } from "./permissions";
 import { deletePasswordResetCodes, deleteUserSessions, unlinkGoogle } from "./access.js";
 import { failpoint, findUsersByEmailInsensitive } from "./lib.js";
+import { canReceiveEmail, googleLinkedEmail, sendEmail } from "./email.js";
 import { role } from "./validators.js";
 
 /**
@@ -234,6 +235,15 @@ export const setGoogleAllowedByEmail = internalMutation({
       await deleteUserSessions(ctx.db, user._id);
     }
     return { userId: user._id, googleAllowed: allowed };
+  },
+});
+
+/** ICS-119 — aviso por correo de una vinculación nueva de Google (lo agenda convex/auth.js). */
+export const sendGoogleLinkedNotice = internalAction({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.runQuery(internal.users.getUserById, { userId });
+    if (user?.email && canReceiveEmail(user.email)) await sendEmail({ to: user.email, ...googleLinkedEmail() });
   },
 });
 

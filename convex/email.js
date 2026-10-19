@@ -82,3 +82,15 @@ export function passwordChangedEmail() {
   const text = "La contraseña de tu cuenta de CRM ICSAAB se acaba de cambiar y se cerraron las sesiones abiertas.\nSi no fuiste tú, avisa de inmediato a la administradora del CRM.";
   return { subject, html, text };
 }
+
+/** Aviso de que se vinculó una cuenta de Google para entrar al CRM (ICS-119). */
+export function googleLinkedEmail() {
+  const subject = "Se vinculó Google a tu cuenta de CRM ICSAAB";
+  const html = layout({
+    title: "Se vinculó tu cuenta de Google",
+    bodyHtml: `<p style="margin:0 0 16px;font-size:15px;line-height:1.5;">A partir de ahora puedes entrar al CRM con el botón "Continuar con Google", usando la cuenta de Google de este correo.</p>
+      <p style="margin:0;font-size:14px;line-height:1.5;color:#555;">Si no fuiste tú, avisa de inmediato a la administradora del CRM para que te quite el acceso con Google.</p>`,
+  });
+  const text = "A partir de ahora puedes entrar a CRM ICSAAB con \"Continuar con Google\", usando la cuenta de Google de este correo.\nSi no fuiste tú, avisa de inmediato a la administradora del CRM.";
+  return { subject, html, text };
+}
