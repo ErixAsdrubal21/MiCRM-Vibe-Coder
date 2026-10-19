@@ -91,6 +91,7 @@ try {
   const admin = await (await browser.createBrowserContext()).newPage();
   Object.assign(pages, { vend, admin });
   for (const p of [vend, admin]) {
+    p.on("dialog", (d) => d.accept()); // "¿Salir del sitio?" de Convex con una petición en curso (ver smoke-ics115-csp)
     p.on("pageerror", (e) => problems.push(`JS: ${e.message}`));
     p.on("console", (m) => { if (/Content Security Policy|Refused to/i.test(m.text())) problems.push(`CSP: ${m.text()}`); });
   }
