@@ -191,10 +191,11 @@ function TeamSection({ ownUserId, showInviteForm, setShowInviteForm }) {
  * Fila de miembro del equipo: "restablecer contraseña" (hallazgo de
  * auditoría PRD↔app, 2026-09-13 — ver `resetUserPassword` en convex/users.js
  * para el porqué de esta forma en vez de un correo de recuperación) y
- * desactivar/reactivar la cuenta (ICS-117) y permitir/quitar Google
- * (ICS-118). Restablecer y desactivar no se ofrecen sobre la propia fila del
+ * desactivar/reactivar la cuenta (ICS-117), permitir/quitar Google
+ * (ICS-118) y cambiar el rol (ICS-130). Restablecer y desactivar no se ofrecen sobre la propia fila del
  * admin — para uno mismo ya existe "Cambiar contraseña" arriba, y nadie puede
- * desactivarse a sí mismo —; Google sí, para poder permitírselo a sí misma.
+ * desactivarse ni cambiarse el rol a sí mismo —; Google sí, para poder
+ * permitírselo a sí misma.
  */
 const CONFIRM_LABEL = {
   reset: "Sí, restablecer",
@@ -202,17 +203,22 @@ const CONFIRM_LABEL = {
   reactivate: "Sí, reactivar",
   allowGoogle: "Sí, permitir",
   removeGoogle: "Sí, quitar",
+  changeRole: "Sí, cambiar",
 };
 const CONFIRM_QUESTION = {
   reset: (name) => `¿Restablecer la contraseña de ${name}? También se le quitará el acceso con Google.`,
   deactivate: (name) => `¿Desactivar a ${name}? Se cerrarán sus sesiones y no podrá entrar. Sus datos se conservan.`,
   reactivate: (name) => `¿Reactivar a ${name}? Podrá volver a entrar con su contraseña.`,
   allowGoogle: (name) => `¿Permitir que ${name} entre con Google? Solo con una cuenta de Google que tenga su mismo correo.`,
+  changeRole: (name, _isSelf, member) =>
+    `¿Cambiar a ${name} a ${ROLE_LABEL[otherRole(member.role)]}? Se cerrarán sus sesiones y verá las pantallas de ese rol.`,
   removeGoogle: (name, isSelf) =>
     isSelf
       ? "¿Quitarte el acceso con Google? Se cerrarán tus otras sesiones; esta sigue abierta."
       : `¿Quitar el acceso con Google a ${name}? Se desvincula su cuenta de Google y se cierran sus sesiones.`,
 };
+
+const otherRole = (r) => (r === "administrador" ? "vendedor" : "administrador");
 
 function googleStatus(member) {
   if (!member.googleAllowed) return "";
@@ -224,6 +230,7 @@ function TeamMemberRow({ member, isSelf }) {
   const deactivateUser = useMutation(api.users.deactivateUser);
   const reactivateUser = useMutation(api.users.reactivateUser);
   const setGoogleAllowed = useMutation(api.users.setGoogleAllowed);
+  const changeUserRole = useMutation(api.users.changeUserRole);
   const [confirming, setConfirming] = useState(null); // null | clave de CONFIRM_LABEL
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -241,6 +248,8 @@ function TeamMemberRow({ member, isSelf }) {
         await deactivateUser({ userId: member._id });
       } else if (confirming === "reactivate") {
         await reactivateUser({ userId: member._id });
+      } else if (confirming === "changeRole") {
+        await changeUserRole({ userId: member._id, role: otherRole(member.role) });
       } else if (confirming === "allowGoogle" || confirming === "removeGoogle") {
         await setGoogleAllowed({ userId: member._id, allowed: confirming === "allowGoogle" });
       }
@@ -270,7 +279,7 @@ function TeamMemberRow({ member, isSelf }) {
       <div>
         <p className="team-row__name">{member.name}</p>
         <p className="team-row__role">{ROLE_LABEL[member.role]}{disabled ? " · Desactivada" : googleStatus(member)}</p>
-        {confirming && <p className="team-row__confirm">{CONFIRM_QUESTION[confirming](member.name, isSelf)}</p>}
+        {confirming && <p className="team-row__confirm">{CONFIRM_QUESTION[confirming](member.name, isSelf, member)}</p>}
         {error && <p style={{ fontFamily: "var(--font-ui)", fontSize: 11.5, color: "var(--color-critical)", margin: "2px 0 0" }}>{error}</p>}
       </div>
       {confirming ? (
@@ -289,6 +298,7 @@ function TeamMemberRow({ member, isSelf }) {
           )}
           {!isSelf && (
             <>
+              <IconButton icon="user-cog" label={`Cambiar rol de ${member.name}`} onClick={() => setConfirming("changeRole")} />
               <IconButton icon="key-round" label={`Restablecer contraseña de ${member.name}`} onClick={() => setConfirming("reset")} />
               <IconButton icon="user-x" label={`Desactivar a ${member.name}`} onClick={() => setConfirming("deactivate")} />
             </>

@@ -1,4 +1,4 @@
-// Smoke test de ICS-117/118/120/133 (desactivar y reactivar usuarios; permiso de
+// Smoke test de ICS-117/118/120/130/133 (desactivar y reactivar usuarios; permiso de
 // Google por persona; mensaje de error visible al invitar) — pantalla, en navegador.
 // Sirve out/ aplicando out/_headers (como Cloudflare Pages, con la CSP) y,
 // contra el deployment de DESARROLLO: una administradora desactiva a un
@@ -122,6 +122,21 @@ try {
   await waitText(admin, "La contraseña actual no es correcta.");
   check("Cambiar contraseña con la actual equivocada muestra el motivo", !(await has(admin, "Server Error")));
   await clickText(admin, "Cancelar");
+
+  // ICS-130: cambiar el rol (y volverlo), con el vendedor conectado
+  await clickLabel(admin, `Cambiar rol de ${NAME}`);
+  await waitText(admin, `¿Cambiar a ${NAME} a Administradora?`);
+  await clickText(admin, "Sí, cambiar");
+  await waitText(admin, "Administradora · ");
+  await admin.waitForFunction((n) => [...document.querySelectorAll(".team-row")].some((r) => r.innerText.includes(n) && r.innerText.includes("Administradora")), { timeout: 30000 }, NAME);
+  check("Cambiar rol: la fila muestra el nuevo rol", true);
+  await vend.waitForFunction(() => location.pathname === "/login", { timeout: 30000 });
+  check("Cambiar rol cierra la sesión abierta de la persona (la saca al login)", true);
+  await clickLabel(admin, `Cambiar rol de ${NAME}`);
+  await clickText(admin, "Sí, cambiar");
+  await admin.waitForFunction((n) => [...document.querySelectorAll(".team-row")].some((r) => r.innerText.includes(n) && r.innerText.includes("Vendedor")), { timeout: 30000 }, NAME);
+  await login(vend, VEND);
+  await vend.waitForFunction(() => location.pathname === "/tareas", { timeout: 30000 });
 
   // ICS-118: permitir y quitar Google
   await clickLabel(admin, `Permitir Google a ${NAME}`);

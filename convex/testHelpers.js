@@ -4,6 +4,7 @@ import { recordTimelineEvent, syncPendingFollowUpOwner, syncOpenOpportunitiesOwn
 import { resolveSignInUser } from "./auth.js";
 
 const SMOKE_PREFIXES = [
+  "[SMOKE ICS-130]",
   "[SMOKE ICS-92]",
   "[SMOKE ICS-85]",
   "[SMOKE ICS-79]",

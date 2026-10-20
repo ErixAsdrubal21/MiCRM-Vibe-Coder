@@ -14,6 +14,7 @@ import {
 } from "./access.js";
 import { Scrypt } from "lucia";
 import { logSecurityEvent } from "./securityEvents.js";
+import { ACTIVE_STAGE_VALUES, OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
 import { failpoint, findUsersByEmailInsensitive } from "./lib.js";
 import { canReceiveEmail, googleLinkedEmail, sendEmail } from "./email.js";
 import { role } from "./validators.js";
@@ -202,6 +203,65 @@ export const reactivateUser = mutation({
       await ctx.db.patch(userId, { disabledAt: undefined });
       await logSecurityEvent(ctx.db, { type: "user_reactivated", actorId: me._id, targetUserId: userId });
     }
+    return null;
+  },
+});
+
+/**
+ * ICS-130 — cambiar el rol de un miembro (solo administrador), en una sola
+ * transacción: cambia el rol, cierra todas las sesiones de la persona (sus
+ * pantallas y permisos cambian) y lo registra en la bitácora.
+ *
+ * - Nadie cambia su propio rol, y nunca queda el CRM sin administradora
+ *   activa (si dos administradoras se degradan una a otra al mismo tiempo,
+ *   la segunda se reintenta y la rechaza `requireAdministrador`, como en
+ *   `deactivateUser`).
+ * - Una cuenta desactivada se reactiva primero.
+ * - Decisión de la usuaria (2026-10-20, opción A): un vendedor con prospectos
+ *   activos u oportunidades abiertas no puede pasar a administrador — como
+ *   administrador ya no podría operarlos. Hoy el CRM no tiene reasignación de
+ *   cartera, así que solo se permite si todo lo suyo está cerrado.
+ */
+export const changeUserRole = mutation({
+  args: { userId: v.id("users"), role },
+  handler: async (ctx, { userId, role: newRole }) => {
+    const me = await requireAdministrador(ctx);
+    if (userId === me._id) throw new ConvexError("No puedes cambiar tu propio rol.");
+    const target = await ctx.db.get(userId);
+    if (!target) throw new ConvexError("Usuario no encontrado.");
+    if (target.disabledAt) throw new ConvexError("Esa cuenta está desactivada. Reactívala antes de cambiarle el rol.");
+    if (target.role === newRole) return null;
+
+    if (target.role === "administrador") {
+      const activeAdmins = (await ctx.db.query("users").collect()).filter((u) => u.role === "administrador" && isActiveUser(u));
+      if (activeAdmins.filter((u) => u._id !== userId).length === 0) {
+        throw new ConvexError("El CRM debe conservar al menos una administradora activa.");
+      }
+    }
+    if (newRole === "administrador") {
+      const prospects = await ctx.db.query("prospects").withIndex("by_owner", (q) => q.eq("ownerId", userId)).collect();
+      const activeProspects = prospects.filter((p) => ACTIVE_STAGE_VALUES.includes(p.stage)).length;
+      const opportunities = await ctx.db.query("opportunities").withIndex("by_owner_and_stage", (q) => q.eq("ownerId", userId)).collect();
+      const openOpportunities = opportunities.filter((o) => OPPORTUNITY_OPEN_STAGES.includes(o.stage)).length;
+      if (activeProspects > 0 || openOpportunities > 0) {
+        const parts = [];
+        if (activeProspects > 0) parts.push(`${activeProspects} prospecto${activeProspects === 1 ? "" : "s"} activo${activeProspects === 1 ? "" : "s"}`);
+        if (openOpportunities > 0) parts.push(`${openOpportunities} oportunidad${openOpportunities === 1 ? "" : "es"} abierta${openOpportunities === 1 ? "" : "s"}`);
+        throw new ConvexError(
+          `${target.name ?? "Esta persona"} tiene ${parts.join(" y ")}. Como administradora ya no podría operarlos; ciérralos antes de cambiarle el rol.`,
+        );
+      }
+    }
+
+    await ctx.db.patch(userId, { role: newRole });
+    failpoint("change_role_after_patch");
+    await deleteUserSessions(ctx.db, userId);
+    await logSecurityEvent(ctx.db, {
+      type: "role_changed",
+      actorId: me._id,
+      targetUserId: userId,
+      details: { fromRole: target.role, toRole: newRole },
+    });
     return null;
   },
 });
