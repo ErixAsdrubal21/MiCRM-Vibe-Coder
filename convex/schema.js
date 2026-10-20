@@ -27,6 +27,19 @@ import {
  * `timelineEvents` como fuente cronológica única de la ficha.
  */
 
+// ICS-121 — tipos de la bitácora de seguridad (ver convex/securityEvents.js).
+export const SECURITY_EVENT_TYPES = [
+  "user_deactivated",
+  "user_reactivated",
+  "google_allowed",
+  "google_removed",
+  "google_linked",
+  "password_changed",
+  "password_reset_code",
+  "password_reset_admin",
+  "password_reset_emergency",
+];
+
 export default defineSchema({
   ...authTables,
   users: defineTable({
@@ -189,4 +202,16 @@ export default defineSchema({
     expiresAt: v.number(),
     attempts: v.number(),
   }).index("by_email", ["email"]),
+
+  // ICS-121 — bitácora de seguridad (convex/securityEvents.js). Nunca guarda
+  // contraseñas, códigos, hashes ni tokens. Se conserva 12 meses.
+  securityEvents: defineTable({
+    type: v.union(...SECURITY_EVENT_TYPES.map((t) => v.literal(t))),
+    actorId: v.optional(v.id("users")), // falta si lo hizo un script
+    targetUserId: v.id("users"),
+    at: v.number(),
+    details: v.optional(v.object({ googleRemoved: v.optional(v.boolean()), via: v.optional(v.string()) })),
+  })
+    .index("by_at", ["at"])
+    .index("by_target_and_at", ["targetUserId", "at"]),
 });

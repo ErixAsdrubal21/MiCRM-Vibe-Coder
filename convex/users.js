@@ -13,6 +13,7 @@ import {
   unlinkGoogle,
 } from "./access.js";
 import { Scrypt } from "lucia";
+import { logSecurityEvent } from "./securityEvents.js";
 import { failpoint, findUsersByEmailInsensitive } from "./lib.js";
 import { canReceiveEmail, googleLinkedEmail, sendEmail } from "./email.js";
 import { role } from "./validators.js";
@@ -89,6 +90,7 @@ export const applyPasswordByEmail = internalMutation({
     await deleteUserSessions(ctx.db, user._id);
     await deletePasswordResetCodes(ctx.db, user.email);
     await resetFailedPasswordAttempts(ctx.db, account._id);
+    await logSecurityEvent(ctx.db, { type: "password_reset_emergency", targetUserId: user._id, details: { via: "script" } });
     return null;
   },
 });
@@ -177,7 +179,8 @@ export const deactivateUser = mutation({
     await deleteUserSessions(ctx.db, userId);
     failpoint("deactivate_after_sessions");
     await deletePasswordResetCodes(ctx.db, target.email);
-    await unlinkGoogle(ctx.db, userId);
+    const googleRemoved = await unlinkGoogle(ctx.db, userId);
+    await logSecurityEvent(ctx.db, { type: "user_deactivated", actorId: me._id, targetUserId: userId, details: { googleRemoved } });
     return null;
   },
 });
@@ -192,10 +195,13 @@ export const deactivateUser = mutation({
 export const reactivateUser = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireAdministrador(ctx);
+    const me = await requireAdministrador(ctx);
     const target = await ctx.db.get(userId);
     if (!target) throw new ConvexError("Usuario no encontrado.");
-    if (target.disabledAt) await ctx.db.patch(userId, { disabledAt: undefined });
+    if (target.disabledAt) {
+      await ctx.db.patch(userId, { disabledAt: undefined });
+      await logSecurityEvent(ctx.db, { type: "user_reactivated", actorId: me._id, targetUserId: userId });
+    }
     return null;
   },
 });
@@ -218,11 +224,15 @@ export const setGoogleAllowed = mutation({
     if (!target) throw new ConvexError("Usuario no encontrado.");
     if (allowed) {
       if (!isActiveUser(target)) throw new ConvexError("Esa cuenta está desactivada. Reactívala antes de permitirle Google.");
-      await ctx.db.patch(userId, { googleAllowed: true });
+      if (!target.googleAllowed) {
+        await ctx.db.patch(userId, { googleAllowed: true });
+        await logSecurityEvent(ctx.db, { type: "google_allowed", actorId: me._id, targetUserId: userId });
+      }
       return null;
     }
-    await unlinkGoogle(ctx.db, userId);
+    const removed = await unlinkGoogle(ctx.db, userId);
     await deleteUserSessions(ctx.db, userId, userId === me._id ? await getAuthSessionId(ctx) : null);
+    if (removed) await logSecurityEvent(ctx.db, { type: "google_removed", actorId: me._id, targetUserId: userId });
     return null;
   },
 });
@@ -240,10 +250,14 @@ export const setGoogleAllowedByEmail = internalMutation({
     const user = matches[0];
     if (allowed) {
       if (!isActiveUser(user)) throw new ConvexError(`La cuenta ${email} está desactivada.`);
-      await ctx.db.patch(user._id, { googleAllowed: true });
+      if (!user.googleAllowed) {
+        await ctx.db.patch(user._id, { googleAllowed: true });
+        await logSecurityEvent(ctx.db, { type: "google_allowed", targetUserId: user._id, details: { via: "script" } });
+      }
     } else {
-      await unlinkGoogle(ctx.db, user._id);
+      const removed = await unlinkGoogle(ctx.db, user._id);
       await deleteUserSessions(ctx.db, user._id);
+      if (removed) await logSecurityEvent(ctx.db, { type: "google_removed", targetUserId: user._id, details: { via: "script" } });
     }
     return { userId: user._id, googleAllowed: allowed };
   },
@@ -382,6 +396,7 @@ export const changeOwnPasswordTx = internalMutation({
     await resetFailedPasswordAttempts(ctx.db, account._id);
     await deletePasswordResetCodes(ctx.db, me.email);
     await deleteUserSessions(ctx.db, me._id, await getAuthSessionId(ctx));
+    await logSecurityEvent(ctx.db, { type: "password_changed", actorId: me._id, targetUserId: me._id });
     return { ok: true };
   },
 });
@@ -437,10 +452,11 @@ export const applyAdminPasswordReset = internalMutation({
     await ctx.db.patch(account._id, { secret });
     failpoint("admin_reset_after_password");
     // ICS-118: restablecer desde administración también quita Google.
-    await unlinkGoogle(ctx.db, userId);
+    const googleRemoved = await unlinkGoogle(ctx.db, userId);
     await deleteUserSessions(ctx.db, userId);
     await deletePasswordResetCodes(ctx.db, target.email);
     await resetFailedPasswordAttempts(ctx.db, account._id);
+    await logSecurityEvent(ctx.db, { type: "password_reset_admin", actorId: me._id, targetUserId: userId, details: { googleRemoved } });
     return null;
   },
 });

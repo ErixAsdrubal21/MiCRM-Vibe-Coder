@@ -19,9 +19,11 @@ export async function deleteUserSessions(db, userId, exceptSessionId = null) {
  * Quita la vinculación con Google y apaga el permiso (`googleAllowed`), para
  * que el siguiente login con Google no la vuelva a crear por correo. Borra
  * también los códigos de verificación OAuth pendientes de esa vinculación: un
- * login de Google que estaba a medias ya no puede completarse.
+ * login de Google que estaba a medias ya no puede completarse. Devuelve si
+ * había algo que quitar (permiso o vinculación), para la bitácora (ICS-121).
  */
 export async function unlinkGoogle(db, userId) {
+  const wasAllowed = Boolean((await db.get(userId))?.googleAllowed);
   const accounts = await db
     .query("authAccounts")
     .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "google"))
@@ -32,6 +34,7 @@ export async function unlinkGoogle(db, userId) {
     await db.delete(account._id);
   }
   await db.patch(userId, { googleAllowed: false });
+  return wasAllowed || accounts.length > 0;
 }
 
 /** Borra los códigos de recuperación de contraseña pendientes de un correo. */

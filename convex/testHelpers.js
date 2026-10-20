@@ -309,6 +309,9 @@ export const deleteSmokeAuthUsers = internalMutation({
         for (const t of tokens) await ctx.db.delete(t._id);
         await ctx.db.delete(s._id);
       }
+      for (const event of await ctx.db.query("securityEvents").withIndex("by_target_and_at", (q) => q.eq("targetUserId", u._id)).collect()) {
+        await ctx.db.delete(event._id); // ICS-121
+      }
       await ctx.db.delete(u._id);
     }
     for (const table of ["passwordResetCodes", "passwordResetRequests"]) {
@@ -441,5 +444,28 @@ export const smokePasswordAttempts = internalQuery({
     if (!account) return null;
     const row = await ctx.db.query("authRateLimits").withIndex("identifier", (q) => q.eq("identifier", account._id)).unique();
     return row ? row.attemptsLeft : null;
+  },
+});
+
+/** ICS-121 — eventos de la bitácora cuya persona afectada es una fila de prueba, en orden. */
+export const smokeSecurityEvents = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    requireSmokeAuthEmail(email);
+    const user = (await ctx.db.query("users").collect()).find((u) => u.email === email);
+    if (!user) return [];
+    const events = await ctx.db.query("securityEvents").withIndex("by_target_and_at", (q) => q.eq("targetUserId", user._id)).collect();
+    return events.map((e) => ({ ...e, _id: undefined, _creationTime: undefined }));
+  },
+});
+
+/** ICS-121 — inserta un evento de prueba con antigüedad dada, para probar la limpieza de 12 meses. */
+export const insertSmokeSecurityEvent = internalMutation({
+  args: { email: v.string(), ageMs: v.number() },
+  handler: async (ctx, { email, ageMs }) => {
+    requireSmokeAuthEmail(email);
+    const user = (await ctx.db.query("users").collect()).find((u) => u.email === email);
+    if (!user) throw new Error(`No existe la fila de prueba ${email}.`);
+    return ctx.db.insert("securityEvents", { type: "password_changed", targetUserId: user._id, actorId: user._id, at: Date.now() - ageMs });
   },
 });

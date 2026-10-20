@@ -4,6 +4,7 @@ import { Password } from "@convex-dev/auth/providers/Password";
 import { findUsersByEmailInsensitive } from "./lib.js";
 import { isActiveUser } from "./permissions.js";
 import { internal } from "./_generated/api.js";
+import { logSecurityEvent } from "./securityEvents.js";
 
 /**
  * ICS-108 — acceso con Google, solo para cuentas ya aprovisionadas.
@@ -131,6 +132,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       // misma transacción: si el login no termina, no se envía.
       if (type === "oauth" && !existingUserId) {
         await ctx.scheduler.runAfter(0, internal.users.sendGoogleLinkedNotice, { userId });
+        await logSecurityEvent(ctx.db, { type: "google_linked", actorId: userId, targetUserId: userId });
       }
       return userId;
     },
