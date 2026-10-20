@@ -10,6 +10,7 @@
 
 import type * as access from "../access.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as email from "../email.js";
 import type * as followUps from "../followUps.js";
 import type * as http from "../http.js";
@@ -23,6 +24,7 @@ import type * as passwordReset from "../passwordReset.js";
 import type * as permissions from "../permissions.js";
 import type * as prospects from "../prospects.js";
 import type * as sales from "../sales.js";
+import type * as securityEvents from "../securityEvents.js";
 import type * as seedDemo from "../seedDemo.js";
 import type * as testHelpers from "../testHelpers.js";
 import type * as timeline from "../timeline.js";
@@ -38,6 +40,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   auth: typeof auth;
+  crons: typeof crons;
   email: typeof email;
   followUps: typeof followUps;
   http: typeof http;
@@ -51,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   permissions: typeof permissions;
   prospects: typeof prospects;
   sales: typeof sales;
+  securityEvents: typeof securityEvents;
   seedDemo: typeof seedDemo;
   testHelpers: typeof testHelpers;
   timeline: typeof timeline;
