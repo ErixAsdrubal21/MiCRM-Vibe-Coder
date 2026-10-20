@@ -1,4 +1,4 @@
-// Smoke test de ICS-117/118/133 (desactivar y reactivar usuarios; permiso de
+// Smoke test de ICS-117/118/120/133 (desactivar y reactivar usuarios; permiso de
 // Google por persona; mensaje de error visible al invitar) — pantalla, en navegador.
 // Sirve out/ aplicando out/_headers (como Cloudflare Pages, con la CSP) y,
 // contra el deployment de DESARROLLO: una administradora desactiva a un
@@ -111,6 +111,16 @@ try {
   await admin.$eval("#iu-correo", (el) => el.form.requestSubmit());
   await waitText(admin, "Ya existe una cuenta con ese correo.");
   check("Invitar un correo existente muestra \"Ya existe una cuenta con ese correo.\"", !(await has(admin, "Server Error")));
+  await clickText(admin, "Cancelar");
+
+  // ICS-120: "Cambiar contraseña" con la contraseña actual equivocada muestra el motivo
+  await clickText(admin, "Cambiar contraseña");
+  await set(admin, "#cp-actual", "contraseña-equivocada");
+  await set(admin, "#cp-nueva", "otra-contraseña-larga");
+  await set(admin, "#cp-confirmar", "otra-contraseña-larga");
+  await admin.$eval("#cp-actual", (el) => el.form.requestSubmit());
+  await waitText(admin, "La contraseña actual no es correcta.");
+  check("Cambiar contraseña con la actual equivocada muestra el motivo", !(await has(admin, "Server Error")));
   await clickText(admin, "Cancelar");
 
   // ICS-118: permitir y quitar Google

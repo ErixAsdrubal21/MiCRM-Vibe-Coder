@@ -1,15 +1,18 @@
 import { action, internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import {
-  createAccount,
-  getAuthSessionId,
-  invalidateSessions,
-  modifyAccountCredentials,
-  retrieveAccount,
-} from "@convex-dev/auth/server";
+import { createAccount, getAuthSessionId } from "@convex-dev/auth/server";
 import { api, internal } from "./_generated/api";
-import { getActiveUserId, isActiveUser, requireAdministrador } from "./permissions";
-import { deletePasswordResetCodes, deleteUserSessions, unlinkGoogle } from "./access.js";
+import { getActiveUserId, isActiveUser, requireAdministrador, requireAuthenticatedUser } from "./permissions";
+import {
+  deletePasswordResetCodes,
+  deleteUserSessions,
+  passwordAccountOf,
+  recordFailedPasswordAttempt,
+  resetFailedPasswordAttempts,
+  tooManyFailedPasswordAttempts,
+  unlinkGoogle,
+} from "./access.js";
+import { Scrypt } from "lucia";
 import { failpoint, findUsersByEmailInsensitive } from "./lib.js";
 import { canReceiveEmail, googleLinkedEmail, sendEmail } from "./email.js";
 import { role } from "./validators.js";
@@ -68,18 +71,26 @@ export const provisionPassword = internalAction({
 export const resetPasswordByEmail = internalAction({
   args: { email: v.string(), newPassword: v.string() },
   handler: async (ctx, { email, newPassword }) => {
-    const user = await ctx.runQuery(internal.users.getUserByEmail, { email });
-    if (!user) throw new ConvexError(`No existe ninguna cuenta con el correo ${email}.`);
-    await modifyAccountCredentials(ctx, { provider: "password", account: { id: email, secret: newPassword } });
-    await invalidateSessions(ctx, { userId: user._id });
+    await ctx.runMutation(internal.users.applyPasswordByEmail, { email, secret: await new Scrypt().hash(newPassword) });
     return "ok";
   },
 });
 
-/** Fila `users` por correo — solo para `resetPasswordByEmail`, que corre en una action sin `ctx.db`. */
-export const getUserByEmail = internalQuery({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", email)).unique(),
+/** ICS-120 — la parte transaccional de `resetPasswordByEmail`: contraseña, sesiones y códigos juntos. */
+export const applyPasswordByEmail = internalMutation({
+  args: { email: v.string(), secret: v.string() },
+  handler: async (ctx, { email, secret }) => {
+    const matches = await findUsersByEmailInsensitive(ctx.db, email);
+    if (matches.length !== 1) throw new ConvexError(`Se esperaba exactamente una cuenta con el correo ${email}; hay ${matches.length}.`);
+    const user = matches[0];
+    const account = await passwordAccountOf(ctx.db, user._id);
+    if (!account) throw new ConvexError(`La cuenta ${email} no tiene contraseña.`);
+    await ctx.db.patch(account._id, { secret });
+    await deleteUserSessions(ctx.db, user._id);
+    await deletePasswordResetCodes(ctx.db, user.email);
+    await resetFailedPasswordAttempts(ctx.db, account._id);
+    return null;
+  },
 });
 
 /**
@@ -247,15 +258,6 @@ export const sendGoogleLinkedNotice = internalAction({
   },
 });
 
-/** ICS-118 — quita Google y cierra sesiones; para `resetUserPassword`, que corre en una action. */
-export const unlinkGoogleAndSessions = internalMutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    await unlinkGoogle(ctx.db, userId);
-    await deleteUserSessions(ctx.db, userId);
-  },
-});
-
 /**
  * Fila `users` de un invitado, sin credencial todavía. Existencia + inserción
  * en una sola mutation (transaccional) para que dos invitaciones concurrentes
@@ -334,48 +336,57 @@ export const inviteUser = action({
 });
 
 /**
- * ICS-28: cambio de contraseña autenticado (cualquier rol). Exige la
- * contraseña actual antes de aceptar la nueva (defensa en profundidad: una
- * sesión robada sola no basta para tomar la cuenta permanentemente) e
- * invalida el resto de sesiones activas (`authSessions`) al terminar, mismo
- * patrón que usa internamente el propio flujo de reset de Convex Auth. Esto
- * bloquea que otras sesiones renueven su token, pero NO revoca de inmediato
- * un JWT de acceso ya emitido — Convex Auth los verifica por firma, sin
- * consultar la base en cada request (por diseño, para no perder la ventaja
- * de rendimiento de un JWT). Ventana de exposición acotada al TTL por
- * defecto del token (1h, `DEFAULT_JWT_DURATION_MS` en
- * @convex-dev/auth/server/implementation/tokens.js) — mismo tradeoff
- * estándar de cualquier auth basado en JWT de corta duración + refresh
- * revocable (Auth0, Firebase, etc.), no es una falla de esta implementación.
+ * ICS-28 / ICS-120: cambio de contraseña autenticado (cualquier rol). La
+ * action solo traduce el resultado; todo pasa en `changeOwnPasswordTx`, una
+ * sola mutation: verifica la contraseña actual, guarda la nueva (mismo hash
+ * que Convex Auth: Scrypt de `lucia`), borra los códigos de recuperación
+ * pendientes y cierra las demás sesiones —la actual sigue abierta—. Todo o
+ * nada. Conserva Google (ICS-118: es la propia persona, con su contraseña).
+ *
+ * Una contraseña actual equivocada no cambia nada y cuenta para el mismo
+ * límite de intentos que el login (convex/access.js); por eso la mutation
+ * devuelve el resultado en vez de lanzar error: lanzar desharía también el
+ * registro del intento fallido.
  */
+const CHANGE_PASSWORD_ERRORS = {
+  WRONG_PASSWORD: "La contraseña actual no es correcta.",
+  TOO_MANY_ATTEMPTS: "Demasiados intentos con una contraseña incorrecta. Espera unos minutos y vuelve a intentarlo.",
+  INVALID_PASSWORD: "La nueva contraseña debe tener entre 8 y 128 caracteres.",
+  NO_PASSWORD: "Tu cuenta no tiene contraseña. Pide a una administradora que te la restablezca.",
+};
+
 export const changeOwnPassword = action({
   args: { currentPassword: v.string(), newPassword: v.string() },
-  handler: async (ctx, { currentPassword, newPassword }) => {
-    const me = await ctx.runQuery(api.users.currentUser, {});
-    if (!me) throw new ConvexError("No autenticado.");
-    if (!me.email) throw new ConvexError("Tu cuenta no tiene un correo asociado.");
-    if (newPassword.length < 8) {
-      throw new ConvexError("La nueva contraseña debe tener al menos 8 caracteres.");
-    }
-
-    try {
-      await retrieveAccount(ctx, { provider: "password", account: { id: me.email, secret: currentPassword } });
-    } catch {
-      throw new ConvexError("La contraseña actual no es correcta.");
-    }
-
-    await modifyAccountCredentials(ctx, { provider: "password", account: { id: me.email, secret: newPassword } });
-
-    const sessionId = await getAuthSessionId(ctx);
-    if (sessionId) {
-      await invalidateSessions(ctx, { userId: me._id, except: [sessionId] });
-    }
-
+  handler: async (ctx, args) => {
+    const result = await ctx.runMutation(internal.users.changeOwnPasswordTx, args);
+    if (!result.ok) throw new ConvexError(CHANGE_PASSWORD_ERRORS[result.reason]);
     return "ok";
   },
 });
 
-/** Fila `users` por id — solo para `resetUserPassword`, que corre en una action sin `ctx.db`. */
+export const changeOwnPasswordTx = internalMutation({
+  args: { currentPassword: v.string(), newPassword: v.string() },
+  handler: async (ctx, { currentPassword, newPassword }) => {
+    const me = await requireAuthenticatedUser(ctx);
+    if (newPassword.length < 8 || newPassword.length > 128) return { ok: false, reason: "INVALID_PASSWORD" };
+    const account = await passwordAccountOf(ctx.db, me._id);
+    if (!account) return { ok: false, reason: "NO_PASSWORD" };
+    if (await tooManyFailedPasswordAttempts(ctx.db, account._id)) return { ok: false, reason: "TOO_MANY_ATTEMPTS" };
+    if (!(await new Scrypt().verify(account.secret ?? "", currentPassword))) {
+      await recordFailedPasswordAttempt(ctx.db, account._id);
+      return { ok: false, reason: "WRONG_PASSWORD" };
+    }
+
+    await ctx.db.patch(account._id, { secret: await new Scrypt().hash(newPassword) });
+    failpoint("change_own_after_password");
+    await resetFailedPasswordAttempts(ctx.db, account._id);
+    await deletePasswordResetCodes(ctx.db, me.email);
+    await deleteUserSessions(ctx.db, me._id, await getAuthSessionId(ctx));
+    return { ok: true };
+  },
+});
+
+/** Fila `users` por id — para actions, que no tienen `ctx.db` (p. ej. `sendGoogleLinkedNotice`). */
 export const getUserById = internalQuery({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => ctx.db.get(userId),
@@ -392,34 +403,44 @@ export const getUserById = internalQuery({
  * como "pide a tu administrador que te la restablezca", no como un enlace
  * de autoservicio — no prometer lo que el sistema no hace.
  *
- * `modifyAccountCredentials` reemplaza el secreto de la cuenta `password`
- * existente sin necesitar la contraseña anterior (a diferencia de
- * `changeOwnPassword`, que si la exige porque el dueño está actuando sobre
- * sí mismo). Invalida TODAS las sesiones activas del usuario objetivo —una
- * contraseña que ya no conoce nadie más que el admin no debe dejar sesiones
- * vivas colgando.
+ * Reemplaza el secreto de la cuenta `password` sin necesitar la contraseña
+ * anterior (a diferencia de `changeOwnPassword`, que sí la exige porque la
+ * persona actúa sobre sí misma). Cierra TODAS las sesiones de la persona —una
+ * contraseña que solo conoce la administradora no debe dejar sesiones vivas—,
+ * quita Google (ICS-118) y borra sus códigos de recuperación pendientes
+ * (ICS-120): un código pedido antes ya no sirve.
  */
 export const resetUserPassword = action({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    const me = await ctx.runQuery(api.users.currentUser, {});
-    if (!me || me.role !== "administrador") {
-      throw new ConvexError("Solo un administrador puede restablecer contraseñas.");
-    }
-
-    const target = await ctx.runQuery(internal.users.getUserById, { userId });
-    if (!target) throw new ConvexError("Usuario no encontrado.");
-    if (!target.email) throw new ConvexError("Ese usuario no tiene correo asociado.");
-    if (target.disabledAt) throw new ConvexError("Esa cuenta está desactivada. Reactívala antes de restablecer su contraseña.");
-
-    // ICS-118: restablecer desde administración también quita Google (primero,
-    // para que una falla a medio camino deje la cuenta más cerrada, no menos).
-    // Paso separado hasta ICS-120, que hará todo esto en una sola transacción.
-    await ctx.runMutation(internal.users.unlinkGoogleAndSessions, { userId: target._id });
+    // ICS-120: la contraseña temporal se genera aquí (una action tiene azar
+    // real) y la mutation `applyAdminPasswordReset` hace todo lo demás junto:
+    // permisos, contraseña, Google, sesiones y códigos. Si algo falla, nada
+    // cambia y la contraseña temporal nunca se muestra.
     const tempPassword = generateTempPassword();
-    await modifyAccountCredentials(ctx, { provider: "password", account: { id: target.email, secret: tempPassword } });
-    await invalidateSessions(ctx, { userId: target._id });
-
+    await ctx.runMutation(internal.users.applyAdminPasswordReset, { userId, secret: await new Scrypt().hash(tempPassword) });
     return { tempPassword };
+  },
+});
+
+export const applyAdminPasswordReset = internalMutation({
+  args: { userId: v.id("users"), secret: v.string() },
+  handler: async (ctx, { userId, secret }) => {
+    const me = await requireAuthenticatedUser(ctx);
+    if (me.role !== "administrador") throw new ConvexError("Solo un administrador puede restablecer contraseñas.");
+    const target = await ctx.db.get(userId);
+    if (!target) throw new ConvexError("Usuario no encontrado.");
+    if (target.disabledAt) throw new ConvexError("Esa cuenta está desactivada. Reactívala antes de restablecer su contraseña.");
+    const account = await passwordAccountOf(ctx.db, userId);
+    if (!account) throw new ConvexError("Ese usuario no tiene contraseña que restablecer.");
+
+    await ctx.db.patch(account._id, { secret });
+    failpoint("admin_reset_after_password");
+    // ICS-118: restablecer desde administración también quita Google.
+    await unlinkGoogle(ctx.db, userId);
+    await deleteUserSessions(ctx.db, userId);
+    await deletePasswordResetCodes(ctx.db, target.email);
+    await resetFailedPasswordAttempts(ctx.db, account._id);
+    return null;
   },
 });

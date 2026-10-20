@@ -43,3 +43,45 @@ export async function deletePasswordResetCodes(db, email) {
     .collect();
   for (const code of codes) await db.delete(code._id);
 }
+
+/** Cuenta de contraseña de la persona (o null). */
+export async function passwordAccountOf(db, userId) {
+  return db
+    .query("authAccounts")
+    .withIndex("userIdAndProvider", (q) => q.eq("userId", userId).eq("provider", "password"))
+    .unique();
+}
+
+/**
+ * ICS-120 — límite de intentos con la contraseña equivocada, en la misma tabla
+ * y con la misma regla que el login de Convex Auth (`authRateLimits`, por
+ * cuenta, 10 por hora que se recuperan poco a poco), así que el login y
+ * "Cambiar contraseña" comparten el contador.
+ */
+const MAX_FAILED_PER_HOUR = 10;
+const HOUR_MS = 60 * 60 * 1000;
+
+async function rateLimitRow(db, accountId) {
+  return db.query("authRateLimits").withIndex("identifier", (q) => q.eq("identifier", accountId)).unique();
+}
+
+function attemptsLeftOf(row, now) {
+  if (!row) return MAX_FAILED_PER_HOUR;
+  return Math.min(MAX_FAILED_PER_HOUR, row.attemptsLeft + (now - row.lastAttemptTime) * (MAX_FAILED_PER_HOUR / HOUR_MS));
+}
+
+export async function tooManyFailedPasswordAttempts(db, accountId) {
+  return attemptsLeftOf(await rateLimitRow(db, accountId), Date.now()) < 1;
+}
+
+export async function recordFailedPasswordAttempt(db, accountId) {
+  const now = Date.now();
+  const row = await rateLimitRow(db, accountId);
+  if (row) await db.patch(row._id, { attemptsLeft: attemptsLeftOf(row, now) - 1, lastAttemptTime: now });
+  else await db.insert("authRateLimits", { identifier: accountId, attemptsLeft: MAX_FAILED_PER_HOUR - 1, lastAttemptTime: now });
+}
+
+export async function resetFailedPasswordAttempts(db, accountId) {
+  const row = await rateLimitRow(db, accountId);
+  if (row) await db.delete(row._id);
+}

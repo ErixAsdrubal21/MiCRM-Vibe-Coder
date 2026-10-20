@@ -429,3 +429,17 @@ export const countSmokeGoogleNotices = internalQuery({
     return jobs.filter((j) => j.name.includes("sendGoogleLinkedNotice") && j.args[0]?.userId === user._id).length;
   },
 });
+
+/** ICS-120 — intentos fallidos restantes de la cuenta de contraseña de una fila de prueba (null = sin registro). */
+export const smokePasswordAttempts = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    requireSmokeAuthEmail(email);
+    const user = (await ctx.db.query("users").collect()).find((u) => u.email === email);
+    if (!user) return null;
+    const account = await ctx.db.query("authAccounts").withIndex("userIdAndProvider", (q) => q.eq("userId", user._id).eq("provider", "password")).unique();
+    if (!account) return null;
+    const row = await ctx.db.query("authRateLimits").withIndex("identifier", (q) => q.eq("identifier", account._id)).unique();
+    return row ? row.attemptsLeft : null;
+  },
+});

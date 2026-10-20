@@ -128,11 +128,22 @@ try {
 
   // 6) confirm: respuestas inválidas uniformes
   setCode("11111111");
-  const wrong = await timed(() => confirm(EMAIL, "22222222", NEW_PASS));
-  const ghost = await timed(() => confirm(GHOST, "22222222", NEW_PASS));
+  await confirm(GHOST, "22222222", NEW_PASS); // calentar: la primera llamada tras publicar carga el módulo en frío
+  // Medianas de mediciones alternadas (una sola medición varía demasiado). Hasta 4 intentos
+  // incorrectos para no agotar los 5 del código, que se usa más abajo.
+  const wrongs = [], ghosts = [];
+  let wrong, ghost;
+  for (let i = 0; i < 4; i++) {
+    ghost = await timed(() => confirm(GHOST, "22222222", NEW_PASS));
+    wrong = await timed(() => confirm(EMAIL, "22222222", NEW_PASS));
+    ghosts.push(ghost.ms); wrongs.push(wrong.ms);
+  }
+  setCode("11111111"); // reinicia los intentos del código…
+  await confirm(EMAIL, "22222222", NEW_PASS); // …y deja exactamente 1 contado, como espera la verificación siguiente
   check("Código incorrecto → INVALID_CODE", wrong.r?.reason === "INVALID_CODE");
   check("Correo inexistente → la misma respuesta", JSON.stringify(ghost.r) === JSON.stringify(wrong.r));
-  check("confirm tarda parecido (inexistente vs incorrecto)", Math.abs(wrong.ms - ghost.ms) < 250, `${wrong.ms.toFixed(0)} ms / ${ghost.ms.toFixed(0)} ms`);
+  check("confirm tarda parecido (inexistente vs incorrecto)", Math.abs(median(wrongs) - median(ghosts)) < 250,
+    `medianas ${median(wrongs).toFixed(0)} ms / ${median(ghosts).toFixed(0)} ms`);
   check("El intento fallido quedó contado", dump().codes[0]?.attempts === 1);
   const short = await confirm(EMAIL, "11111111", "corta");
   check("Contraseña corta → INVALID_PASSWORD sin gastar el código", short.reason === "INVALID_PASSWORD" && dump().codes[0]?.attempts === 1);
