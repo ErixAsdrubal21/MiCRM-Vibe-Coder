@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
+# Configuración de CodeRabbit para el CRM (revisa cada pull request a main).
+language: "es"
+tone_instructions: "Revisa en español, directo y concreto. Prioriza seguridad, permisos y que nada quede a medias en la base. Explica el riesgo real de cada hallazgo en una frase; evita comentarios de estilo menores."
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+  path_filters:
+    - "!convex/_generated/**"
+    - "!out/**"
+    - "!.next/**"
+    - "!ds-bundle/_vendor/**"
+    - "!package-lock.json"
+  path_instructions:
+    - path: "convex/**"
+      instructions: |
+        Backend de Convex. Revisa en especial:
+        - Identidad siempre del servidor (getActiveUserId / requireAuthenticatedUser / requireVendedor / requireAdministrador en convex/permissions.js), nunca de un argumento del cliente.
+        - Mensajes para el usuario con `throw new ConvexError("...")`; un `Error` normal se oculta en producción como "Server Error" (ICS-133).
+        - Cambios de acceso (contraseñas, Google, roles, desactivar) en UNA sola mutation, con los helpers de convex/access.js y `logSecurityEvent` (convex/securityEvents.js) en la misma transacción. La bitácora nunca guarda contraseñas, códigos, hashes ni tokens.
+        - Nada de crear usuarios fuera de los flujos aprobados (createOrUpdateUser / resolveSignInUser en convex/auth.js nunca crea usuarios).
+        - Funciones de prueba solo como internalMutation/internalQuery en convex/testHelpers.js.
+        - Módulos que importa convex/auth.js deben importar con extensión `.js` (los scripts de Node los cargan).
+    - path: "src/**"
+      instructions: |
+        Frontend Next.js exportado como sitio estático (Cloudflare Pages) con CSP por hashes.
+        - Mostrar errores con `errorMessage(err, fallback)` de src/lib/errors.js, nunca `err.message`.
+        - No agregar scripts inline, `eval` ni recursos externos nuevos sin actualizar scripts/generate-headers.mjs (la CSP los bloquearía).
+        - Las consultas que exigen un rol se saltan ("skip") para los demás roles.
+        - Textos de la interfaz en español.
+    - path: "scripts/**"
+      instructions: |
+        Scripts de soporte y smoke tests. Deben negarse a correr contra producción (perfect-crocodile-599), limpiar sus datos de prueba en `finally` y nunca imprimir secretos.
+
+  tools:
+    gitleaks:
+      enabled: true
+    eslint:
+      enabled: true
+
+chat:
+  auto_reply: true
