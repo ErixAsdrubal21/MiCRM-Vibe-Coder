@@ -38,6 +38,7 @@ export const SECURITY_EVENT_TYPES = [
   "password_reset_code",
   "password_reset_admin",
   "password_reset_emergency",
+  "role_changed",
 ];
 
 export default defineSchema({
@@ -210,7 +211,14 @@ export default defineSchema({
     actorId: v.optional(v.id("users")), // falta si lo hizo un script
     targetUserId: v.id("users"),
     at: v.number(),
-    details: v.optional(v.object({ googleRemoved: v.optional(v.boolean()), via: v.optional(v.string()) })),
+    details: v.optional(
+      v.object({
+        googleRemoved: v.optional(v.boolean()),
+        via: v.optional(v.string()),
+        fromRole: v.optional(v.string()), // role_changed (ICS-130)
+        toRole: v.optional(v.string()),
+      }),
+    ),
   })
     .index("by_at", ["at"])
     .index("by_target_and_at", ["targetUserId", "at"]),
