@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi as api } from "convex/server";
 import { errorMessage } from "../src/lib/errors.js";
+import { convexRun } from "./convex-run.mjs";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) {
@@ -40,10 +41,7 @@ function check(label, ok, detail = "") {
   console.log(`${ok ? "✔" : "✘"} ${label}${detail ? ` — ${detail}` : ""}`);
   if (!ok) failures++;
 }
-function run(fn, args = {}) {
-  const out = execFileSync("npx", ["convex", "run", fn, JSON.stringify(args)], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  return out ? JSON.parse(out) : null;
-}
+const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
 const setFailpoint = (name) =>
   execFileSync("npx", name ? ["convex", "env", "set", "TEST_FAILPOINT", name] : ["convex", "env", "remove", "TEST_FAILPOINT"], { stdio: "ignore" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -106,7 +104,8 @@ try {
     Boolean(e3) && s3.email === VEND && s3.googleAllowed && s3.accounts.some((a) => a.startsWith("google:")) &&
     codesFor(VEND) === 1 && Boolean(await vend.query(api.users.currentUser, {})) && emailEvents(VEND).length === 0);
 
-  // Cambio de correo
+  // Cambio de correo (los trabajos agendados de corridas anteriores siguen un tiempo: se mide la diferencia)
+  const noticesBefore = run("testHelpers:countSmokeEmailChangeNotices", { newEmail: VEND_NEW });
   await admin.mutation(api.users.updateMember, { userId: ids[VEND], email: "  Delivered+ICS131-Nuevo@resend.dev " });
   const s4 = byId(ids[VEND]);
   check("El correo cambia, normalizado a minúsculas", s4.email === VEND_NEW && s4.accounts.includes(`password:${VEND_NEW}`));
@@ -114,7 +113,7 @@ try {
   check("Cierra sus sesiones", (await vend.query(api.users.currentUser, {})) === null && s4.sessions === 0);
   check("El código de recuperación del correo viejo deja de servir",
     codesFor(VEND) === 0 && (await anon().mutation(api.passwordReset.confirm, { email: VEND, code: "12345678", newPassword: "contraseña-larga-x" })).ok === false);
-  check("Avisa a las dos direcciones (aviso agendado)", run("testHelpers:countSmokeEmailChangeNotices", { newEmail: VEND_NEW }) === 1);
+  check("Avisa a las dos direcciones (aviso agendado)", run("testHelpers:countSmokeEmailChangeNotices", { newEmail: VEND_NEW }) === noticesBefore + 1);
   const ev = emailEvents(VEND_NEW);
   check("Queda en la bitácora, hecho por la administradora y sin guardar los correos",
     ev.length === 1 && ev[0].actorId === ids[ADMIN] && ev[0].details?.googleRemoved === true && !JSON.stringify(ev[0]).includes("@"));

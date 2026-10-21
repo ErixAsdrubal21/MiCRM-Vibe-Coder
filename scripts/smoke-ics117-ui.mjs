@@ -22,6 +22,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
+import { convexRun } from "./convex-run.mjs";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) throw new Error("Solo contra el deployment de desarrollo.");
@@ -38,7 +39,7 @@ const ADMIN_NAME = "Admin Smoke ICS117";
 
 let failures = 0;
 const check = (l, ok, d = "") => { console.log(`${ok ? "✔" : "✘"} ${l}${d ? ` — ${d}` : ""}`); if (!ok) failures++; };
-const run = (fn, args = {}) => { const o = execFileSync("npx", ["convex", "run", fn, JSON.stringify(args)], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); return o ? JSON.parse(o) : null; };
+const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
 const waitText = (p, t, ms = 30000) => p.waitForFunction((x) => document.body.innerText.includes(x), { timeout: ms }, t);
 const has = (p, t) => p.evaluate((x) => document.body.innerText.includes(x), t);
 async function set(p, sel, val) { await p.waitForSelector(sel); await p.$eval(sel, (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); }, val); }

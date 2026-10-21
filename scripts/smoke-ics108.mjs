@@ -23,6 +23,7 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { googleProfileOrReject } from "../convex/auth.js";
+import { convexRun } from "./convex-run.mjs";
 
 let failures = 0;
 function check(label, ok, detail = "") {
@@ -30,13 +31,7 @@ function check(label, ok, detail = "") {
   if (!ok) failures++;
 }
 
-function run(fn, args = {}) {
-  const out = execFileSync("npx", ["convex", "run", fn, JSON.stringify(args)], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-  return out ? JSON.parse(out) : null;
-}
+const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
 
 function runFails(fn, args) {
   try {
