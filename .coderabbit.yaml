@@ -13,10 +13,9 @@ reviews:
   collapse_walkthrough: true
   sequence_diagrams: false
   auto_review:
+    # Siempre revisa los PR hacia la rama principal (main); `base_branches` solo serviría para agregar otras.
     enabled: true
     drafts: false
-    base_branches:
-      - "main"
   path_filters:
     - "!convex/_generated/**"
     - "!out/**"
