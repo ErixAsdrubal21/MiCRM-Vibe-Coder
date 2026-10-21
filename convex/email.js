@@ -94,3 +94,27 @@ export function googleLinkedEmail() {
   const text = "A partir de ahora puedes entrar a CRM ICSAAB con \"Continuar con Google\", usando la cuenta de Google de este correo.\nSi no fuiste tú, avisa de inmediato a la administradora del CRM.";
   return { subject, html, text };
 }
+
+/** Aviso al correo ANTERIOR de que el acceso al CRM cambió de dirección (ICS-131). */
+export function emailChangedOldAddressEmail({ newEmail }) {
+  const subject = "Tu correo de acceso a CRM ICSAAB cambió";
+  const html = layout({
+    title: "Tu correo de acceso cambió",
+    bodyHtml: `<p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Una administradora cambió el correo con el que entras al CRM. Desde ahora entras con <strong>${escapeHtml(newEmail)}</strong>; esta dirección ya no sirve para entrar.</p>
+      <p style="margin:0;font-size:14px;line-height:1.5;color:#555;">Si no esperabas este cambio, avisa de inmediato a la administradora del CRM.</p>`,
+  });
+  const text = `Una administradora cambió el correo con el que entras a CRM ICSAAB. Desde ahora entras con ${newEmail}; esta dirección ya no sirve para entrar.\nSi no esperabas este cambio, avisa de inmediato a la administradora del CRM.`;
+  return { subject, html, text };
+}
+
+/** Aviso al correo NUEVO de que ahora es el de acceso al CRM (ICS-131). */
+export function emailChangedNewAddressEmail() {
+  const subject = "Ahora entras a CRM ICSAAB con este correo";
+  const html = layout({
+    title: "Este es tu nuevo correo de acceso",
+    bodyHtml: `<p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Una administradora cambió tu correo de acceso al CRM a esta dirección. Tu contraseña es la misma; si no la recuerdas, usa "Olvidé mi contraseña" en el login.</p>
+      <p style="margin:0;font-size:14px;line-height:1.5;color:#555;">Si entrabas con Google, se desvinculó: pide a la administradora que te lo vuelva a permitir. Si no esperabas este cambio, avísale de inmediato.</p>`,
+  });
+  const text = "Una administradora cambió tu correo de acceso a CRM ICSAAB a esta dirección. Tu contraseña es la misma; si no la recuerdas, usa \"Olvidé mi contraseña\" en el login.\nSi entrabas con Google, se desvinculó. Si no esperabas este cambio, avisa a la administradora.";
+  return { subject, html, text };
+}

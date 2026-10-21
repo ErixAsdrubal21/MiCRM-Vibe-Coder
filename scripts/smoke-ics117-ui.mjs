@@ -1,4 +1,4 @@
-// Smoke test de ICS-117/118/120/130/133 (desactivar y reactivar usuarios; permiso de
+// Smoke test de ICS-117/118/120/130/131/133 (desactivar y reactivar usuarios; permiso de
 // Google por persona; mensaje de error visible al invitar) — pantalla, en navegador.
 // Sirve out/ aplicando out/_headers (como Cloudflare Pages, con la CSP) y,
 // contra el deployment de DESARROLLO: una administradora desactiva a un
@@ -22,6 +22,7 @@ import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
+import { convexRun } from "./convex-run.mjs";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) throw new Error("Solo contra el deployment de desarrollo.");
@@ -38,7 +39,7 @@ const ADMIN_NAME = "Admin Smoke ICS117";
 
 let failures = 0;
 const check = (l, ok, d = "") => { console.log(`${ok ? "✔" : "✘"} ${l}${d ? ` — ${d}` : ""}`); if (!ok) failures++; };
-const run = (fn, args = {}) => { const o = execFileSync("npx", ["convex", "run", fn, JSON.stringify(args)], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); return o ? JSON.parse(o) : null; };
+const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
 const waitText = (p, t, ms = 30000) => p.waitForFunction((x) => document.body.innerText.includes(x), { timeout: ms }, t);
 const has = (p, t) => p.evaluate((x) => document.body.innerText.includes(x), t);
 async function set(p, sel, val) { await p.waitForSelector(sel); await p.$eval(sel, (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); }, val); }
@@ -182,6 +183,21 @@ try {
   await submit(vend);
   await vend.waitForFunction(() => location.pathname === "/tareas", { timeout: 30000 });
   check("Reactivado, entra con su contraseña de siempre", true);
+  // ICS-131: editar nombre (miembro y propio); el propio correo no se edita
+  await clickLabel(admin, `Editar a ${NAME}`);
+  await set(admin, "#em-nombre", `${NAME} Editado`);
+  await admin.$eval("#em-nombre", (el) => el.form.requestSubmit());
+  await waitText(admin, `${NAME} Editado`);
+  check("Editar a un miembro: el nombre nuevo aparece en Equipo", true);
+  await clickLabel(admin, `Editar a ${ADMIN_NAME}`);
+  check("En su propia fila el correo no es editable", await admin.$eval("#em-correo", (el) => el.disabled));
+  await clickText(admin, "Cancelar");
+  await clickLabel(admin, "Editar mi nombre");
+  await set(admin, "#mi-nombre", `${ADMIN_NAME} Dos`);
+  await admin.$eval("#mi-nombre", (el) => el.form.requestSubmit());
+  await waitText(admin, `${ADMIN_NAME} Dos`);
+  check("Editar mi nombre desde la tarjeta de perfil", true);
+
   check("Sin errores de JavaScript ni violaciones de CSP", problems.length === 0, problems.slice(0, 3).join(" | "));
 } catch (e) {
   failures++;

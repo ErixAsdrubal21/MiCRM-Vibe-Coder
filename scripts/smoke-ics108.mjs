@@ -23,6 +23,7 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { googleProfileOrReject } from "../convex/auth.js";
+import { convexRun } from "./convex-run.mjs";
 
 let failures = 0;
 function check(label, ok, detail = "") {
@@ -30,13 +31,7 @@ function check(label, ok, detail = "") {
   if (!ok) failures++;
 }
 
-function run(fn, args = {}) {
-  const out = execFileSync("npx", ["convex", "run", fn, JSON.stringify(args)], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-  return out ? JSON.parse(out) : null;
-}
+const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
 
 function runFails(fn, args) {
   try {
@@ -177,10 +172,11 @@ try {
     "Password con el correo viejo ya no entra",
     Boolean(runFails("auth:signIn", { provider: "password", params: { email: INVITED, password, flow: "signIn" } })),
   );
-  check(
-    "El vínculo de Google existente sigue apuntando al mismo usuario tras el cambio",
-    googleSignIn("smoke-ics108-nuevo@example.com", "smoke-sub-persona") === invitedId,
-  );
+  // ICS-131: cambiar el correo quita Google (esa cuenta de Google era del correo viejo)
+  check("ICS-131: cambiar el correo quita la vinculación de Google", !byEmail("smoke-ics108-nuevo@example.com")?.accounts.some((a) => a.startsWith("google:")));
+  check("…y el Google viejo ya no entra", googleRejected("smoke-ics108-nuevo@example.com", "smoke-sub-persona"));
+  run("users:setGoogleAllowedByEmail", { email: "smoke-ics108-nuevo@example.com", allowed: true });
+  check("Con el permiso de nuevo, Google se vuelve a vincular al mismo usuario", googleSignIn("smoke-ics108-nuevo@example.com", "smoke-sub-persona") === invitedId);
 
   // ICS-118: quitar el permiso rechaza también la vinculación ya existente, sin revincular
   run("users:setGoogleAllowedByEmail", { email: "smoke-ics108-nuevo@example.com", allowed: false });

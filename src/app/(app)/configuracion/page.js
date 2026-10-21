@@ -27,6 +27,7 @@ export default function Configuracion() {
   const { signOut } = useAuthActions();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [editingName, setEditingName] = useState(false);
 
   async function handleLogout() {
     await signOut();
@@ -39,13 +40,18 @@ export default function Configuracion() {
     <>
       <TopBar title="Configuración" />
 
-      <div className="profile-card">
-        <div className="avatar">{initials(session.name)}</div>
-        <div>
-          <p className="profile-card__name">{session.name}</p>
-          <p className="profile-card__role">{ROLE_LABEL[session.role]}</p>
+      {editingName ? (
+        <EditOwnNameForm currentName={session.name} onDone={() => setEditingName(false)} />
+      ) : (
+        <div className="profile-card">
+          <div className="avatar">{initials(session.name)}</div>
+          <div style={{ flex: 1 }}>
+            <p className="profile-card__name">{session.name}</p>
+            <p className="profile-card__role">{ROLE_LABEL[session.role]}</p>
+          </div>
+          <IconButton icon="pencil" label="Editar mi nombre" onClick={() => setEditingName(true)} />
         </div>
-      </div>
+      )}
 
       {!showPasswordForm ? (
         <button type="button" className="settings-row" onClick={() => setShowPasswordForm(true)}>
@@ -235,6 +241,7 @@ function TeamMemberRow({ member, isSelf }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [tempPassword, setTempPassword] = useState(null);
+  const [editing, setEditing] = useState(false);
   const disabled = Boolean(member.disabledAt);
 
   async function handleConfirm() {
@@ -274,6 +281,8 @@ function TeamMemberRow({ member, isSelf }) {
     );
   }
 
+  if (editing) return <EditMemberForm member={member} isSelf={isSelf} onDone={() => setEditing(false)} />;
+
   return (
     <div className={`team-row${disabled ? " team-row--disabled" : ""}`}>
       <div>
@@ -291,6 +300,7 @@ function TeamMemberRow({ member, isSelf }) {
         !isSelf && <IconButton icon="user-check" label={`Reactivar a ${member.name}`} onClick={() => setConfirming("reactivate")} />
       ) : (
         <div style={{ display: "flex", gap: 4 }}>
+          <IconButton icon="pencil" label={`Editar a ${member.name}`} onClick={() => setEditing(true)} />
           {member.googleAllowed ? (
             <IconButton icon="unlink" label={`Quitar Google a ${member.name}`} onClick={() => setConfirming("removeGoogle")} />
           ) : (
@@ -306,6 +316,103 @@ function TeamMemberRow({ member, isSelf }) {
         </div>
       )}
     </div>
+  );
+}
+
+const ERROR_TEXT_STYLE = { fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 };
+
+/** ICS-131 — cada persona cambia su propio nombre. */
+function EditOwnNameForm({ currentName, onDone }) {
+  const updateOwnName = useMutation(api.users.updateOwnName);
+  const [name, setName] = useState(currentName ?? "");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      await updateOwnName({ name });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err, "No se pudo guardar tu nombre."));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form className="settings-card" onSubmit={handleSubmit}>
+      <p className="field-label">Editar mi nombre</p>
+      <div className="field-group">
+        <label className="field-label" htmlFor="mi-nombre">Nombre</label>
+        <label className="mn-input mn-input--field">
+          <input id="mi-nombre" type="text" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} style={FIELD_INPUT_STYLE} />
+        </label>
+      </div>
+      {error && <p style={ERROR_TEXT_STYLE}>{error}</p>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <Button type="button" variant="secondary" full disabled={submitting} onClick={onDone}>Cancelar</Button>
+        <Button type="submit" variant="primary" full disabled={submitting}>{submitting ? "Guardando..." : "Guardar"}</Button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * ICS-131 — la administradora edita el nombre y el correo de un miembro. Su
+ * propio correo no se cambia desde aquí (ver `updateMember` en convex/users.js).
+ * Cambiar el correo cierra las sesiones de la persona y le quita Google: se
+ * explica antes de guardar.
+ */
+function EditMemberForm({ member, isSelf, onDone }) {
+  const updateMember = useMutation(api.users.updateMember);
+  const [name, setName] = useState(member.name ?? "");
+  const [email, setEmail] = useState(member.email ?? "");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const emailChanged = email.trim().toLowerCase() !== (member.email ?? "").toLowerCase();
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      await updateMember({ userId: member._id, name, ...(isSelf ? {} : { email }) });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err, "No se pudieron guardar los cambios."));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form className="settings-card" onSubmit={handleSubmit}>
+      <p className="field-label">Editar a {member.name}</p>
+      <div className="field-group">
+        <label className="field-label" htmlFor="em-nombre">Nombre</label>
+        <label className="mn-input mn-input--field">
+          <input id="em-nombre" type="text" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} style={FIELD_INPUT_STYLE} />
+        </label>
+      </div>
+      <div className="field-group">
+        <label className="field-label" htmlFor="em-correo">Correo de acceso</label>
+        <label className="mn-input mn-input--field">
+          <input id="em-correo" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={isSelf} style={FIELD_INPUT_STYLE} />
+        </label>
+        {isSelf && <p className="forgot-help" style={{ margin: "4px 0 0" }}>Tu propio correo no se cambia desde aquí; pídelo a otra administradora o a soporte.</p>}
+      </div>
+      {emailChanged && !isSelf && (
+        <p className="team-row__confirm">
+          Al cambiar el correo se cerrarán sus sesiones y se le quitará el acceso con Google. Le avisaremos al correo anterior y al nuevo.
+        </p>
+      )}
+      {error && <p style={ERROR_TEXT_STYLE}>{error}</p>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <Button type="button" variant="secondary" full disabled={submitting} onClick={onDone}>Cancelar</Button>
+        <Button type="submit" variant="primary" full disabled={submitting}>{submitting ? "Guardando..." : "Guardar"}</Button>
+      </div>
+    </form>
   );
 }
 

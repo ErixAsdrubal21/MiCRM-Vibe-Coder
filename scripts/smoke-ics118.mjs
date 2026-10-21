@@ -24,6 +24,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi as api } from "convex/server";
+import { convexRun } from "./convex-run.mjs";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) {
@@ -39,10 +40,7 @@ function check(label, ok, detail = "") {
   console.log(`${ok ? "✔" : "✘"} ${label}${detail ? ` — ${detail}` : ""}`);
   if (!ok) failures++;
 }
-function run(fn, args = {}) {
-  const out = execFileSync("npx", ["convex", "run", fn, JSON.stringify(args)], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  return out ? JSON.parse(out) : null;
-}
+const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
 const anon = () => new ConvexHttpClient(DEV_URL);
 function authed(token) { const c = new ConvexHttpClient(DEV_URL); c.setAuth(token); return c; }
 const errOf = async (p) => { try { await p; return null; } catch (e) { return String(e.message ?? e); } };

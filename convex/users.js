@@ -16,7 +16,7 @@ import { Scrypt } from "lucia";
 import { logSecurityEvent } from "./securityEvents.js";
 import { ACTIVE_STAGE_VALUES, OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
 import { failpoint, findUsersByEmailInsensitive } from "./lib.js";
-import { canReceiveEmail, googleLinkedEmail, sendEmail } from "./email.js";
+import { canReceiveEmail, emailChangedNewAddressEmail, emailChangedOldAddressEmail, googleLinkedEmail, sendEmail } from "./email.js";
 import { role } from "./validators.js";
 
 /**
@@ -97,28 +97,109 @@ export const applyPasswordByEmail = internalMutation({
 });
 
 /**
- * ICS-108 — cambia el correo de una cuenta existente: la fila de `users` (con
- * la que se vincula el acceso con Google) y su credencial de Password (cuyo
- * `providerAccountId` es el correo con el que se escribe en el login). Rol,
- * nombre y datos del CRM no cambian. `internalMutation`: solo se corre con
- * `npx convex run users:changeUserEmail`, nunca desde la UI.
+ * ICS-131 — cambio del correo de acceso, en la misma transacción que lo llama:
+ * actualiza `users.email` y el `providerAccountId` de su contraseña (el
+ * correo con el que se escribe en el login), borra sus códigos de
+ * recuperación del correo viejo, quita Google (esa cuenta de Google era del
+ * correo viejo; convex/access.js `unlinkGoogle`), cierra todas sus sesiones,
+ * lo registra en la bitácora y agenda un aviso a la dirección vieja y a la
+ * nueva. Devuelve null si el correo no cambia.
+ */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function applyEmailChange(ctx, user, rawEmail, { actorId, via } = {}) {
+  const newEmail = rawEmail.trim().toLowerCase();
+  if (newEmail.length > 254 || !EMAIL_RE.test(newEmail)) throw new ConvexError("Escribe un correo válido.");
+  const oldEmail = user.email ?? "";
+  if (oldEmail.toLowerCase() === newEmail) return null;
+  const taken = (await findUsersByEmailInsensitive(ctx.db, newEmail)).filter((u) => u._id !== user._id);
+  if (taken.length > 0) throw new ConvexError("Ya existe una cuenta con ese correo.");
+
+  await ctx.db.patch(user._id, { email: newEmail });
+  const account = await passwordAccountOf(ctx.db, user._id);
+  if (account) await ctx.db.patch(account._id, { providerAccountId: newEmail });
+  failpoint("email_change_after_patch");
+  await deletePasswordResetCodes(ctx.db, oldEmail);
+  const googleRemoved = await unlinkGoogle(ctx.db, user._id);
+  await deleteUserSessions(ctx.db, user._id);
+  await logSecurityEvent(ctx.db, {
+    type: "email_changed",
+    targetUserId: user._id,
+    ...(actorId ? { actorId } : {}),
+    details: { googleRemoved, ...(via ? { via } : {}) },
+  });
+  await ctx.scheduler.runAfter(0, internal.users.sendEmailChangedNotices, { oldEmail, newEmail });
+  return { userId: user._id, email: newEmail, passwordUpdated: Boolean(account) };
+}
+
+function validName(raw) {
+  const name = raw.trim();
+  if (name.length < 1) throw new ConvexError("El nombre no puede estar vacío.");
+  if (name.length > 80) throw new ConvexError("El nombre no puede tener más de 80 caracteres.");
+  return name;
+}
+
+/**
+ * ICS-131 — editar el nombre y/o el correo de un miembro (solo administrador),
+ * en una sola transacción. El nombre se puede cambiar a cualquiera, también a
+ * sí misma. El correo NO se cambia a sí misma desde aquí: sin una segunda
+ * verificación, una sesión robada bastaría para quedarse con la cuenta; ese
+ * cambio lo hace otra administradora o el script `changeUserEmail`.
+ */
+export const updateMember = mutation({
+  args: { userId: v.id("users"), name: v.optional(v.string()), email: v.optional(v.string()) },
+  handler: async (ctx, { userId, name, email }) => {
+    const me = await requireAdministrador(ctx);
+    const target = await ctx.db.get(userId);
+    if (!target) throw new ConvexError("Usuario no encontrado.");
+    if (name !== undefined) {
+      const clean = validName(name);
+      if (clean !== target.name) await ctx.db.patch(userId, { name: clean });
+    }
+    if (email !== undefined && email.trim().toLowerCase() !== (target.email ?? "").toLowerCase()) {
+      if (userId === me._id) {
+        throw new ConvexError("Tu propio correo no se cambia desde aquí. Pídelo a otra administradora o a soporte.");
+      }
+      await applyEmailChange(ctx, target, email, { actorId: me._id });
+    }
+    return null;
+  },
+});
+
+/** ICS-131 — cada persona puede cambiar su propio nombre (cualquier rol). */
+export const updateOwnName = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const me = await requireAuthenticatedUser(ctx);
+    const clean = validName(name);
+    if (clean !== me.name) await ctx.db.patch(me._id, { name: clean });
+    return null;
+  },
+});
+
+/**
+ * ICS-108 / ICS-131 — cambio de correo por soporte (`npx convex run
+ * users:changeUserEmail '{"from":"…","to":"…"}'`), nunca desde la UI. Mismas
+ * reglas que `updateMember` (quita Google, cierra sesiones, avisa y lo
+ * registra en la bitácora como script).
  */
 export const changeUserEmail = internalMutation({
   args: { from: v.string(), to: v.string() },
   handler: async (ctx, { from, to }) => {
-    const newEmail = to.trim().toLowerCase();
-    const user = await ctx.db.query("users").withIndex("by_email", (q) => q.eq("email", from)).unique();
-    if (!user) throw new ConvexError(`No existe ninguna cuenta con el correo ${from}.`);
-    const taken = await findUsersByEmailInsensitive(ctx.db, newEmail);
-    if (taken.length > 0) throw new ConvexError(`Ya existe una cuenta con el correo ${newEmail}.`);
+    const matches = await findUsersByEmailInsensitive(ctx.db, from);
+    if (matches.length !== 1) throw new ConvexError(`Se esperaba exactamente una cuenta con el correo ${from}; hay ${matches.length}.`);
+    const result = await applyEmailChange(ctx, matches[0], to, { via: "script" });
+    if (!result) throw new ConvexError("El correo nuevo es igual al actual.");
+    return result;
+  },
+});
 
-    await ctx.db.patch(user._id, { email: newEmail });
-    const passwordAccount = await ctx.db
-      .query("authAccounts")
-      .withIndex("providerAndAccountId", (q) => q.eq("provider", "password").eq("providerAccountId", from))
-      .unique();
-    if (passwordAccount) await ctx.db.patch(passwordAccount._id, { providerAccountId: newEmail });
-    return { userId: user._id, email: newEmail, passwordUpdated: Boolean(passwordAccount) };
+/** ICS-131 — avisos de cambio de correo a la dirección vieja y a la nueva. */
+export const sendEmailChangedNotices = internalAction({
+  args: { oldEmail: v.string(), newEmail: v.string() },
+  handler: async (_ctx, { oldEmail, newEmail }) => {
+    if (oldEmail && canReceiveEmail(oldEmail)) await sendEmail({ to: oldEmail, ...emailChangedOldAddressEmail({ newEmail }) });
+    if (canReceiveEmail(newEmail)) await sendEmail({ to: newEmail, ...emailChangedNewAddressEmail() });
   },
 });
 

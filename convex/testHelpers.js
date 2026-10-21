@@ -470,3 +470,13 @@ export const insertSmokeSecurityEvent = internalMutation({
     return ctx.db.insert("securityEvents", { type: "password_changed", targetUserId: user._id, actorId: user._id, at: Date.now() - ageMs });
   },
 });
+
+/** ICS-131 — avisos de cambio de correo agendados hacia un correo nuevo de prueba. */
+export const countSmokeEmailChangeNotices = internalQuery({
+  args: { newEmail: v.string() },
+  handler: async (ctx, { newEmail }) => {
+    requireSmokeAuthEmail(newEmail);
+    const jobs = await ctx.db.system.query("_scheduled_functions").collect();
+    return jobs.filter((j) => j.name.includes("sendEmailChangedNotices") && j.args[0]?.newEmail === newEmail.toLowerCase()).length;
+  },
+});
