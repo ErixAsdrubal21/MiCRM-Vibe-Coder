@@ -39,6 +39,7 @@ export const SECURITY_EVENT_TYPES = [
   "password_reset_admin",
   "password_reset_emergency",
   "role_changed",
+  "email_changed",
 ];
 
 export default defineSchema({

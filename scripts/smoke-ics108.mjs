@@ -177,10 +177,11 @@ try {
     "Password con el correo viejo ya no entra",
     Boolean(runFails("auth:signIn", { provider: "password", params: { email: INVITED, password, flow: "signIn" } })),
   );
-  check(
-    "El vínculo de Google existente sigue apuntando al mismo usuario tras el cambio",
-    googleSignIn("smoke-ics108-nuevo@example.com", "smoke-sub-persona") === invitedId,
-  );
+  // ICS-131: cambiar el correo quita Google (esa cuenta de Google era del correo viejo)
+  check("ICS-131: cambiar el correo quita la vinculación de Google", !byEmail("smoke-ics108-nuevo@example.com")?.accounts.some((a) => a.startsWith("google:")));
+  check("…y el Google viejo ya no entra", googleRejected("smoke-ics108-nuevo@example.com", "smoke-sub-persona"));
+  run("users:setGoogleAllowedByEmail", { email: "smoke-ics108-nuevo@example.com", allowed: true });
+  check("Con el permiso de nuevo, Google se vuelve a vincular al mismo usuario", googleSignIn("smoke-ics108-nuevo@example.com", "smoke-sub-persona") === invitedId);
 
   // ICS-118: quitar el permiso rechaza también la vinculación ya existente, sin revincular
   run("users:setGoogleAllowedByEmail", { email: "smoke-ics108-nuevo@example.com", allowed: false });

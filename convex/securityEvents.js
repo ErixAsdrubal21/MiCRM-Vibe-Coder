@@ -15,6 +15,7 @@ import { internalMutation } from "./_generated/server.js"; // con .js: auth.js l
  *   password_reset_admin                       — una administradora la restableció (ICS-120)
  *   password_reset_emergency                   — script de emergencia (resetPasswordByEmail)
  *   role_changed                               — cambio de rol en Equipo (ICS-130; details.fromRole/toRole)
+ *   email_changed                              — cambio de correo de acceso (ICS-131; no guarda los correos)
  * `actorId` falta cuando lo hizo un script (`details.via = "script"`).
  * `details.googleRemoved` indica que el cambio también quitó Google.
  *
