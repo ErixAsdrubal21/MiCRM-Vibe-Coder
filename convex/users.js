@@ -15,6 +15,7 @@ import {
 import { Scrypt } from "lucia";
 import { logSecurityEvent } from "./securityEvents.js";
 import { ACTIVE_STAGE_VALUES, OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
+import { normalizeLoginEmail } from "./auth.js";
 import { failpoint, findUsersByEmailInsensitive } from "./lib.js";
 import { canReceiveEmail, emailChangedNewAddressEmail, emailChangedOldAddressEmail, googleLinkedEmail, sendEmail } from "./email.js";
 import { role } from "./validators.js";
@@ -48,10 +49,12 @@ export const currentUser = query({
 export const provisionPassword = internalAction({
   args: { email: v.string(), password: v.string() },
   handler: async (ctx, { email, password }) => {
+    // ICS-122: la credencial guarda el correo en minúsculas (así lo busca el login).
+    const loginEmail = normalizeLoginEmail(email);
     await createAccount(ctx, {
       provider: "password",
-      account: { id: email, secret: password },
-      profile: { email },
+      account: { id: loginEmail, secret: password },
+      profile: { email: loginEmail },
     });
     return "ok";
   },
@@ -476,10 +479,11 @@ export const inviteUser = action({
 
     const tempPassword = generateTempPassword();
     try {
+      // ICS-122: la credencial guarda el correo en minúsculas (así lo busca el login).
       await createAccount(ctx, {
         provider: "password",
-        account: { id: trimmedEmail, secret: tempPassword },
-        profile: { email: trimmedEmail },
+        account: { id: normalizeLoginEmail(trimmedEmail), secret: tempPassword },
+        profile: { email: normalizeLoginEmail(trimmedEmail) },
       });
     } catch (err) {
       await ctx.runMutation(internal.users.deletePendingUserRow, { userId: newUserId });
