@@ -74,10 +74,10 @@ try {
   run("testHelpers:insertSmokeAuthUser", { email: EMAIL, role: "vendedor" });
   run("users:provisionPassword", { email: EMAIL, password: OLD_PASS });
 
-  // 1) El flujo `reset` de Convex Auth no queda expuesto
+  // 1) El flujo `reset` de Convex Auth no queda expuesto (desde ICS-122 el proveedor solo acepta signIn)
   const r1 = await errOf(anon().action(api.auth.signIn, { provider: "password", params: { email: EMAIL, flow: "reset" } }));
   const r2 = await errOf(anon().action(api.auth.signIn, { provider: "password", params: { email: GHOST, flow: "reset" } }));
-  check("auth:signIn flow=reset deshabilitado igual para cualquier correo", Boolean(r1?.includes("not enabled") && r2?.includes("not enabled")));
+  check("auth:signIn flow=reset deshabilitado igual para cualquier correo", Boolean(r1?.includes("Solo se permite iniciar sesión") && r2?.includes("Solo se permite iniciar sesión")));
 
   // 2) request: misma respuesta y tiempo exista o no la cuenta
   const tE = [], tG = [], answers = new Set();
@@ -194,7 +194,7 @@ try {
   check("La contraseña nueva entra y ve datos", Boolean(tokNew?.token) && (await sees(tokNew.token)));
 
   // 9) signUp sigue cerrado
-  check("signUp sigue bloqueado", Boolean((await errOf(anon().action(api.auth.signIn, { provider: "password", params: { email: GHOST, password: "Clave12345", flow: "signUp" } })))?.includes("Registro público deshabilitado")));
+  check("signUp sigue bloqueado", Boolean((await errOf(anon().action(api.auth.signIn, { provider: "password", params: { email: GHOST, password: "Clave12345", flow: "signUp" } })))?.includes("Solo se permite iniciar sesión")));
 } catch (err) {
   failures++;
   console.log(`✘ Error en la prueba: ${err.message}`);

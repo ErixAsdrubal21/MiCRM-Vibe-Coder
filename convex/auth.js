@@ -1,6 +1,7 @@
-import { convexAuth } from "@convex-dev/auth/server";
+import { convexAuth, retrieveAccount } from "@convex-dev/auth/server";
 import Google from "@auth/core/providers/google";
-import { Password } from "@convex-dev/auth/providers/Password";
+import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
+import { Scrypt } from "lucia";
 import { findUsersByEmailInsensitive } from "./lib.js";
 import { isActiveUser } from "./permissions.js";
 import { internal } from "./_generated/api.js";
@@ -70,14 +71,13 @@ const GoogleProvisionedOnly = Google({ profile: (googleProfile) => googleProfile
  * mayúsculas, ver `findUsersByEmailInsensitive`) y con rol — cualquier otro
  * correo, o uno que coincida con más de una fila, se rechaza explícitamente.
  *
- * El `profile` de abajo bloquea `flow: "signUp"` del lado del servidor. Sin
- * esto, `createOrUpdateUser` (arriba) vincularía cualquier signUp público a
- * la fila de `users` existente por email — alguien que solo conociera
- * carlos@minegocio.com podría llamar la action pública con `flow: "signUp"`
- * y crearle una contraseña a Carlos antes de que él aprovisione la suya
- * (toma de cuenta). `scripts/provision-user.mjs` no pasa por este flujo:
- * usa `createAccount` directo desde una `internalAction`, que no tiene
- * `flow` en absoluto.
+ * No hay registro público por ninguna vía: el proveedor de contraseña
+ * (`PasswordSignInOnly`, abajo, ICS-122) solo acepta `flow: "signIn"`. Antes
+ * se bloqueaba `flow: "signUp"` del `Password` de Convex Auth: sin eso,
+ * cualquiera que conociera carlos@minegocio.com podía crearle una contraseña
+ * antes de que él aprovisionara la suya (toma de cuenta).
+ * `scripts/provision-user.mjs` usa `createAccount` directo desde una
+ * `internalAction`, sin `flow`.
  *
  * El acceso abierto de un clic (provider "open-access", 2026-09-21) se quitó
  * en ICS-108: con él activo, restringir Google no protegía nada.
@@ -113,18 +113,67 @@ export async function resolveSignInUser(db, { existingUserId, type, email }) {
   return matches[0]._id;
 }
 
+/**
+ * ICS-122 — proveedor de contraseña propio. Reemplaza al `Password` de Convex
+ * Auth con el mismo identificador ("password"), el mismo hash (Scrypt de
+ * `lucia`) y las mismas cuentas, así que las contraseñas actuales siguen
+ * sirviendo. Diferencias:
+ *
+ * - Solo inicia sesión (`flow: "signIn"`). No existen `signUp`, `reset` ni
+ *   `email-verification`: el registro está cerrado (las cuentas se crean con
+ *   `inviteUser` / `provisionPassword`, que usan `createAccount` con
+ *   `crypto.hashSecret` de aquí) y la recuperación es propia
+ *   (convex/passwordReset.js).
+ * - El correo se normaliza (sin espacios, en minúsculas): `Carlos@…` y
+ *   `carlos@…` son la misma cuenta. Las credenciales guardan el correo en
+ *   minúsculas (`migrations:normalizePasswordAccountIds`).
+ * - Correo inexistente: se verifica igual contra un hash ficticio del mismo
+ *   algoritmo y costo, para que la respuesta tarde lo mismo que con una
+ *   contraseña equivocada y no revele qué correos tienen cuenta.
+ * - Mismo límite de intentos que antes: `retrieveAccount` de Convex Auth
+ *   cuenta los fallos por cuenta (`authRateLimits`, 10 por hora). La
+ *   recuperación por código y el restablecimiento de la administradora lo
+ *   limpian (convex/access.js `resetFailedPasswordAttempts`).
+ * - Cualquier fallo responde igual ("Invalid credentials") y tarda lo mismo
+ *   (también una cuenta bloqueada por intentos). Una cuenta desactivada no
+ *   llega a tener sesión (`beforeSessionCreation`, abajo).
+ */
+const scrypt = new Scrypt();
+// Hash ficticio (de un valor aleatorio descartado), generado con los mismos parámetros que las contraseñas reales.
+const DUMMY_PASSWORD_HASH =
+  "9ca076b9be9b3def659155e8019f2b10:50832499715f8825cf751f63dc93c4fbf51ccd8cd975fa2855a6882e8ca4d72f4d55f37ebffc58af3824a9189314c7c9a215a475c921f533324c6493ca012755";
+
+export const normalizeLoginEmail = (email) => (typeof email === "string" ? email.trim().toLowerCase() : "");
+
+const PasswordSignInOnly = ConvexCredentials({
+  id: "password",
+  crypto: {
+    hashSecret: (secret) => scrypt.hash(secret),
+    verifySecret: (secret, hash) => scrypt.verify(hash, secret),
+  },
+  authorize: async (params, ctx) => {
+    if (params.flow !== "signIn") throw new Error("Solo se permite iniciar sesión.");
+    const email = normalizeLoginEmail(params.email);
+    const password = typeof params.password === "string" ? params.password : "";
+    if (!email || !password) throw new Error("Invalid credentials");
+    try {
+      const { user } = await retrieveAccount(ctx, { provider: "password", account: { id: email, secret: password } });
+      return { userId: user._id };
+    } catch (err) {
+      // Sin cuenta o con la cuenta bloqueada por intentos, retrieveAccount responde sin calcular
+      // Scrypt; se calcula aquí para que todos los rechazos tarden lo mismo (PR #22, CWE-208).
+      if (err?.message === "InvalidAccountId" || err?.message === "TooManyFailedAttempts") {
+        await scrypt.verify(DUMMY_PASSWORD_HASH, password);
+      }
+      // Error (no ConvexError) a propósito: el login responde siempre igual y en producción no
+      // debe revelar si la cuenta existe, está bloqueada o desactivada.
+      throw new Error("Invalid credentials");
+    }
+  },
+});
+
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
-  providers: [
-    Password({
-      profile(params) {
-        if (params.flow === "signUp") {
-          throw new Error("Registro público deshabilitado. Contacta a un administrador.");
-        }
-        return { email: params.email };
-      },
-    }),
-    GoogleProvisionedOnly,
-  ],
+  providers: [PasswordSignInOnly, GoogleProvisionedOnly],
   callbacks: {
     async createOrUpdateUser(ctx, { existingUserId, type, profile }) {
       const userId = await resolveSignInUser(ctx.db, { existingUserId, type, email: profile.email });

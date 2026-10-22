@@ -122,7 +122,8 @@ try {
   check("Conserva _id y rol", persona?._id === invitedId && persona?.role === "vendedor");
   check(
     "Queda con cuentas password + google y una sesión",
-    persona?.accounts.includes(`password:${INVITED}`) && persona?.accounts.includes("google:smoke-sub-persona") && persona?.sessions >= 1,
+    persona?.accounts.includes(`password:${INVITED.toLowerCase()}`) && // ICS-122: credencial en minúsculas
+       persona?.accounts.includes("google:smoke-sub-persona") && persona?.sessions >= 1,
     JSON.stringify(persona),
   );
   check("ICS-119: la vinculación nueva agenda un aviso por correo", run("testHelpers:countSmokeGoogleNotices", { email: INVITED }) === 1);

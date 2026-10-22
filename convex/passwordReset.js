@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 import { Scrypt } from "lucia";
 import { findUsersByEmailInsensitive } from "./lib.js";
 import { isActiveUser } from "./permissions.js";
-import { deleteUserSessions, unlinkGoogle } from "./access.js";
+import { deleteUserSessions, resetFailedPasswordAttempts, unlinkGoogle } from "./access.js";
 import { logSecurityEvent } from "./securityEvents.js";
 import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from "./email.js";
 
@@ -172,6 +172,8 @@ export const confirm = mutation({
     // (si el correo o la cuenta de Google estaban comprometidos, no basta con
     // cambiar la contraseña). Una administradora puede volver a permitirlo.
     const googleRemoved = await unlinkGoogle(ctx.db, user._id);
+    // ICS-122: quien recupera su contraseña sale del bloqueo por intentos fallidos.
+    await resetFailedPasswordAttempts(ctx.db, account._id);
     await logSecurityEvent(ctx.db, { type: "password_reset_code", actorId: user._id, targetUserId: user._id, details: { googleRemoved } });
     await ctx.db.delete(row._id); // un solo uso
     // El aviso solo se agenda si la transacción se confirma; si el correo falla después, el cambio ya quedó hecho.

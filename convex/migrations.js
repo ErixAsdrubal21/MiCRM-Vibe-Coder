@@ -225,3 +225,32 @@ export const migrateOpportunitiesAndSales = internalMutation({
     };
   },
 });
+
+/**
+ * ICS-122 — las credenciales de contraseña guardan el correo en minúsculas y
+ * sin espacios: así las busca el proveedor de contraseña (convex/auth.js
+ * `PasswordSignInOnly`). Idempotente. Si dos credenciales quedaran con el
+ * mismo correo (p. ej. `Ana@x` y `ana@x`), no cambia nada y las reporta para
+ * resolverlas a mano. Con `dryRun: true` solo informa.
+ *
+ *   npx convex run migrations:normalizePasswordAccountIds '{"dryRun":true}'
+ *   npx convex run migrations:normalizePasswordAccountIds '{"dryRun":false}'
+ */
+export const normalizePasswordAccountIds = internalMutation({
+  args: { dryRun: v.boolean() },
+  handler: async (ctx, { dryRun }) => {
+    const accounts = (await ctx.db.query("authAccounts").collect()).filter((a) => a.provider === "password");
+    const byNormalized = new Map();
+    for (const a of accounts) {
+      const key = a.providerAccountId.trim().toLowerCase();
+      byNormalized.set(key, [...(byNormalized.get(key) ?? []), a]);
+    }
+    const collisions = [...byNormalized.entries()].filter(([, list]) => list.length > 1).map(([key, list]) => ({ email: key, accounts: list.map((a) => a._id) }));
+    const toChange = accounts.filter((a) => a.providerAccountId !== a.providerAccountId.trim().toLowerCase());
+    if (collisions.length > 0) return { total: accounts.length, toChange: toChange.length, collisions, applied: false };
+    if (!dryRun) {
+      for (const a of toChange) await ctx.db.patch(a._id, { providerAccountId: a.providerAccountId.trim().toLowerCase() });
+    }
+    return { total: accounts.length, toChange: toChange.length, collisions: [], applied: !dryRun };
+  },
+});
