@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../../convex/_generated/api";
 import { Button } from "@/design/components/core/Button.jsx";
+import TurnstileWidget from "@/components/TurnstileWidget.js";
+import { errorMessage } from "@/lib/errors.js";
 
 const INPUT_STYLE = { border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" };
 const ERROR_STYLE = { fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--color-critical)", margin: 0 };
@@ -28,7 +30,7 @@ const SERVER_ERROR = "No pudimos confirmar el resultado. Intenta iniciar sesión
 export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
   const router = useRouter();
   const { signIn } = useAuthActions();
-  const requestCode = useMutation(api.passwordReset.request);
+  const requestCode = useAction(api.passwordReset.request); // ICS-123: valida Turnstile en el servidor
   const confirmReset = useMutation(api.passwordReset.confirm);
 
   const [step, setStep] = useState("email");
@@ -38,15 +40,21 @@ export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileKey, setTurnstileKey] = useState(0); // el token es de un solo uso: cambiarla vuelve a mostrar la verificación
 
   async function handleRequest(e) {
     e.preventDefault();
     setError("");
     setSubmitting(true);
     try {
-      await requestCode({ email });
-    } catch {
-      // El servidor siempre responde igual; un error aquí es de red. Se avanza de todos modos.
+      await requestCode({ email, turnstileToken });
+    } catch (err) {
+      // Verificación rechazada (o falla de red): se queda en esta pantalla con una verificación nueva.
+      setSubmitting(false);
+      setError(errorMessage(err, "No pudimos enviar la solicitud. Revisa tu conexión e intenta de nuevo."));
+      setTurnstileKey((k) => k + 1);
+      return;
     }
     setSubmitting(false);
     setCode("");
@@ -101,6 +109,7 @@ export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
     setStep("email");
     setCode("");
     setError("");
+    setTurnstileKey((k) => k + 1); // el token anterior ya se usó
   };
 
   return (
@@ -115,8 +124,10 @@ export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
             </label>
           </div>
           <p className="forgot-help">Te enviaremos un código de 8 dígitos a ese correo.</p>
-          <Button type="submit" variant="primary" full disabled={submitting}>
-            {submitting ? "Enviando..." : "Enviarme el código"}
+          <TurnstileWidget action="password_reset" onToken={setTurnstileToken} resetKey={turnstileKey} />
+          {error && <p style={ERROR_STYLE}>{error}</p>}
+          <Button type="submit" variant="primary" full disabled={submitting || !turnstileToken}>
+            {submitting ? "Enviando..." : turnstileToken ? "Enviarme el código" : "Verificando que eres una persona..."}
           </Button>
         </form>
       )}

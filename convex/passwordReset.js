@@ -1,5 +1,6 @@
-import { internalAction, internalMutation, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { action, internalAction, internalMutation, mutation } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { verifyTurnstile } from "./turnstile.js";
 import { internal } from "./_generated/api";
 import { Scrypt } from "lucia";
 import { findUsersByEmailInsensitive } from "./lib.js";
@@ -19,9 +20,10 @@ import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from
  * `authRefreshTokens`) con el mismo hash que usa su proveedor `Password`, para
  * poder hacerlo en una sola transacción con la revocación de sesiones.
  *
- * 1. `request(email)` — responde siempre igual y de inmediato; el trabajo se
- *    agenda (`processRequest`), así que ni la respuesta ni su tiempo revelan
- *    si la cuenta existe.
+ * 1. `request(email, turnstileToken)` — valida Turnstile (ICS-123) y luego
+ *    responde siempre igual y de inmediato; el trabajo se agenda
+ *    (`processRequest`), así que ni la respuesta ni su tiempo revelan si la
+ *    cuenta existe.
  * 2. `reserveCode` — una sola transacción: revisa y reserva el cupo de envíos
  *    y, solo si hay cupo y cuenta, reemplaza el código. Una solicitud
  *    bloqueada no toca el código vigente; las transacciones de Convex son
@@ -32,6 +34,9 @@ import { canReceiveEmail, passwordChangedEmail, resetCodeEmail, sendEmail } from
  *    Todo o nada. Cualquier código inválido da la misma respuesta, exista o
  *    no la cuenta.
  */
+
+/** Acción del widget de Turnstile en "Olvidé mi contraseña" (src/lib/turnstile.js usa la misma). */
+export const TURNSTILE_ACTION = "password_reset";
 
 const CODE_MINUTES = 15;
 const MIN_INTERVAL_MS = 60 * 1000;
@@ -69,8 +74,27 @@ async function passwordAccount(db, userId) {
     .unique();
 }
 
-/** Paso 1 (público): pedir un código. Siempre `null`, exista o no la cuenta. */
-export const request = mutation({
+/**
+ * Paso 1 (público): pedir un código. ICS-123: primero valida Cloudflare
+ * Turnstile en el servidor (convex/turnstile.js); sin un token válido no se
+ * agenda nada y se responde con un error claro. Con token válido responde
+ * siempre `null`, exista o no la cuenta (la respuesta sigue sin revelar nada).
+ * Es una action porque la validación hace `fetch`; lo que toca la base pasa en
+ * `enqueueRequest`, que ya no es pública.
+ */
+export const request = action({
+  args: { email: v.string(), turnstileToken: v.optional(v.string()) },
+  handler: async (ctx, { email, turnstileToken }) => {
+    const check = await verifyTurnstile(turnstileToken, TURNSTILE_ACTION);
+    if (!check.ok) {
+      throw new ConvexError("No pudimos comprobar que eres una persona. Vuelve a marcar la verificación e intenta de nuevo.");
+    }
+    await ctx.runMutation(internal.passwordReset.enqueueRequest, { email });
+    return null;
+  },
+});
+
+export const enqueueRequest = internalMutation({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
     const normalized = normalizeEmail(email);

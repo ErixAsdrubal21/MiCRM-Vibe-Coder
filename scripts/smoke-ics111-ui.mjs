@@ -75,6 +75,10 @@ try {
   await click(p, "Olvidé mi contraseña");
   await waitText(p, "Recupera tu contraseña");
   check("Pantalla 1 con el correo del login precargado", (await p.$eval("#pc-email", (e) => e.value)) === EMAIL);
+  // ICS-123: sin la verificación de Turnstile el botón está deshabilitado; con la llave de prueba se aprueba sola.
+  check("Pantalla 1: el botón espera la verificación de Turnstile", await has(p, "Verificando que eres una persona") || await has(p, "Enviarme el código"));
+  await waitText(p, "Enviarme el código", 60000);
+  check("Turnstile aprueba y habilita el botón", true);
   await submit(p);
   await waitText(p, "Escribe tu código");
   check("Pantalla 2: aviso genérico (no confirma que la cuenta exista)", await has(p, `Si ${EMAIL} tiene acceso al CRM`));

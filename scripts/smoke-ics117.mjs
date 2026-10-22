@@ -112,7 +112,7 @@ try {
   run("testHelpers:setSmokeResetCode", { email: VEND, codeHash: hash(VEND, "24681357"), expiresAt: Date.now() + 600000 });
   const r = await anon().mutation(api.passwordReset.confirm, { email: VEND, code: "24681357", newPassword: randomBytes(12).toString("base64url") });
   check("Un código de recuperación válido no le sirve (misma respuesta genérica)", r.ok === false && r.reason === "INVALID_CODE");
-  await anon().mutation(api.passwordReset.request, { email: VEND });
+  await anon().action(api.passwordReset.request, { email: VEND, turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" }); // ICS-123
   await sleep(4000);
   check("Pedir un código para una cuenta desactivada no genera ninguno", run("testHelpers:dumpSmokeReset", { email: VEND }).codes.length === 0);
   const e7 = await errOf(admin1.action(api.users.resetUserPassword, { userId: ids[VEND] }));

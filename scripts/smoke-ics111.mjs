@@ -62,7 +62,8 @@ async function waitFor(pred, label, timeout = 30000) {
 const dump = () => run("testHelpers:dumpSmokeReset", { email: EMAIL });
 const setCode = (code, ttlMs = 10 * 60 * 1000) => run("testHelpers:setSmokeResetCode", { email: EMAIL, codeHash: hash(EMAIL, code), expiresAt: Date.now() + ttlMs });
 const confirm = (email, code, newPassword) => anon().mutation(api.passwordReset.confirm, { email, code, newPassword });
-const request = (email) => anon().mutation(api.passwordReset.request, { email });
+// ICS-123: request es una action que valida Turnstile; en dev, la llave de prueba de Cloudflare acepta este token de prueba.
+const request = (email) => anon().action(api.passwordReset.request, { email, turnstileToken: "XXXX.DUMMY.TOKEN.XXXX" });
 async function login(password) {
   const res = await anon().action(api.auth.signIn, { provider: "password", params: { email: EMAIL, password, flow: "signIn" } });
   return res.tokens;

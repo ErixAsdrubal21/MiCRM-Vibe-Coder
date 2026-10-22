@@ -173,6 +173,7 @@ try {
   await set(p2, "#email", EMAIL);
   await click(p2, "Olvidé mi contraseña");
   await waitText(p2, "Recupera tu contraseña");
+  await waitText(p2, "Enviarme el código", 60000); // ICS-123: el botón se habilita cuando Turnstile aprueba
   await submit(p2);
   await waitText(p2, "Escribe tu código");
   check("Recuperación: pide el código con la CSP", true);
