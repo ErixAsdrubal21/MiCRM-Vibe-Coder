@@ -27,7 +27,7 @@ reviews:
       instructions: |
         Backend de Convex. Revisa en especial:
         - Identidad siempre del servidor (getActiveUserId / requireAuthenticatedUser / requireVendedor / requireAdministrador en convex/permissions.js), nunca de un argumento del cliente.
-        - Mensajes para el usuario con `throw new ConvexError("...")`; un `Error` normal se oculta en producción como "Server Error" (ICS-133).
+        - Mensajes para el usuario con `throw new ConvexError("...")`; un `Error` normal se oculta en producción como "Server Error" (ICS-133). EXCEPCIÓN deliberada: los rechazos del login y de la autenticación en convex/auth.js (proveedores y callbacks) usan `Error` a propósito, para que el login responda siempre igual y no revele si una cuenta existe, está bloqueada o desactivada.
         - Cambios de acceso (contraseñas, Google, roles, desactivar) en UNA sola mutation, con los helpers de convex/access.js y `logSecurityEvent` (convex/securityEvents.js) en la misma transacción. La bitácora nunca guarda contraseñas, códigos, hashes ni tokens.
         - Nada de crear usuarios fuera de los flujos aprobados (createOrUpdateUser / resolveSignInUser en convex/auth.js nunca crea usuarios).
         - Funciones de prueba solo como internalMutation/internalQuery en convex/testHelpers.js.

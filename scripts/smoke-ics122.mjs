@@ -90,6 +90,13 @@ try {
   // Bloqueo por intentos y recuperación por código
   for (let i = 0; i < 10; i++) await caught(signIn({ email: VEND, password: "equivocada", flow: "signIn" }));
   check("Tras 10 fallos, ni la contraseña correcta entra (el bloqueo sigue)", !(await canLogin(VEND, pass[VEND])));
+  const tLocked = [], tGhost2 = [];
+  for (let i = 0; i < 4; i++) {
+    tGhost2.push(await timed(() => signIn({ email: GHOST, password: "equivocada", flow: "signIn" })));
+    tLocked.push(await timed(() => signIn({ email: VEND, password: "equivocada", flow: "signIn" })));
+  }
+  check("Una cuenta bloqueada tarda lo mismo que un correo inexistente (no revela el bloqueo)", Math.abs(median(tLocked) - median(tGhost2)) < 250,
+    `medianas ${median(tLocked).toFixed(0)} ms / ${median(tGhost2).toFixed(0)} ms`);
   run("testHelpers:setSmokeResetCode", { email: VEND, codeHash: createHash("sha256").update(`${VEND}:12345678`).digest("hex"), expiresAt: Date.now() + 600000 });
   const newPass = randomBytes(12).toString("base64url");
   const r = await anon().mutation(api.passwordReset.confirm, { email: VEND, code: "12345678", newPassword: newPass });

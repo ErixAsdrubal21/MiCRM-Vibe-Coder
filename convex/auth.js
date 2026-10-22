@@ -134,8 +134,9 @@ export async function resolveSignInUser(db, { existingUserId, type, email }) {
  *   cuenta los fallos por cuenta (`authRateLimits`, 10 por hora). La
  *   recuperación por código y el restablecimiento de la administradora lo
  *   limpian (convex/access.js `resetFailedPasswordAttempts`).
- * - Cualquier fallo responde igual ("Invalid credentials"). Una cuenta
- *   desactivada no llega a tener sesión (`beforeSessionCreation`, abajo).
+ * - Cualquier fallo responde igual ("Invalid credentials") y tarda lo mismo
+ *   (también una cuenta bloqueada por intentos). Una cuenta desactivada no
+ *   llega a tener sesión (`beforeSessionCreation`, abajo).
  */
 const scrypt = new Scrypt();
 // Hash ficticio (de un valor aleatorio descartado), generado con los mismos parámetros que las contraseñas reales.
@@ -159,8 +160,13 @@ const PasswordSignInOnly = ConvexCredentials({
       const { user } = await retrieveAccount(ctx, { provider: "password", account: { id: email, secret: password } });
       return { userId: user._id };
     } catch (err) {
-      // Sin cuenta, retrieveAccount responde sin calcular Scrypt; se calcula aquí para igualar el tiempo.
-      if (err?.message === "InvalidAccountId") await scrypt.verify(DUMMY_PASSWORD_HASH, password);
+      // Sin cuenta o con la cuenta bloqueada por intentos, retrieveAccount responde sin calcular
+      // Scrypt; se calcula aquí para que todos los rechazos tarden lo mismo (PR #22, CWE-208).
+      if (err?.message === "InvalidAccountId" || err?.message === "TooManyFailedAttempts") {
+        await scrypt.verify(DUMMY_PASSWORD_HASH, password);
+      }
+      // Error (no ConvexError) a propósito: el login responde siempre igual y en producción no
+      // debe revelar si la cuenta existe, está bloqueada o desactivada.
       throw new Error("Invalid credentials");
     }
   },
