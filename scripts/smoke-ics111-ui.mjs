@@ -124,6 +124,21 @@ try {
   await click(p2, "Olvidé mi contraseña");
   await click(p2, "Volver a iniciar sesión");
   check("'Volver a iniciar sesión' regresa al login", Boolean(await p2.$("#pass")));
+  // ICS-123: si la verificación de Cloudflare no carga, se explica y se puede reintentar
+  const p3 = await (await browser.createBrowserContext()).newPage();
+  await p3.setRequestInterception(true);
+  let blockTurnstile = true;
+  p3.on("request", (r) => (blockTurnstile && r.url().startsWith("https://challenges.cloudflare.com/") ? r.abort() : r.continue()));
+  await p3.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await p3.waitForSelector("#email", { timeout: 30000 });
+  await click(p3, "Olvidé mi contraseña");
+  await waitText(p3, "No se pudo cargar la verificación");
+  check("Si Turnstile no carga, lo explica y ofrece reintentar", await has(p3, "Reintentar verificación"));
+  blockTurnstile = false;
+  await click(p3, "Reintentar verificación");
+  await waitText(p3, "Enviarme el código", 60000);
+  check("…y al reintentar con conexión, la verificación aprueba", !(await has(p3, "No se pudo cargar la verificación")));
+
   check("Sin errores de JavaScript", errors.length === 0, errors.join(" | "));
 } catch (e) {
   failures++;

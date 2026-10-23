@@ -29,6 +29,8 @@ export async function verifyTurnstile(token, expectedAction) {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ secret, response: token }),
+      // Si Cloudflare no responde en 5 s, se rechaza (falla cerrada) en vez de esperar al límite de la action (PR #23).
+      signal: AbortSignal.timeout(5000),
     });
     data = await response.json();
   } catch {

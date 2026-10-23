@@ -86,10 +86,19 @@ try {
   failures++;
   console.log(`✘ Error en la prueba: ${e.message}`);
 } finally {
+  // Restaurar el entorno de dev. Si falla (p. ej. sin conexión), avisarlo en grande: una llave
+  // que siempre rechaza dejaría "Olvidé mi contraseña" inservible en dev (ya pasó una vez).
+  const notRestored = [];
   for (const [k, v] of [["TURNSTILE_SECRET_KEY", PASS_KEY], ["TURNSTILE_ALLOWED_HOSTNAMES", "example.com"], ["TURNSTILE_ALLOW_TEST_KEYS", "true"]]) {
-    try { setEnv(k, v); } catch { /* se reporta abajo si algo quedó mal */ }
+    try { setEnv(k, v); } catch { notRestored.push(`npx convex env set ${k} ${v}`); }
   }
-  console.log("Entorno de dev restaurado. Limpieza:", JSON.stringify(run("testHelpers:deleteSmokeAuthUsers")));
+  if (notRestored.length) {
+    failures++;
+    console.log(`\n⚠️  NO SE PUDO RESTAURAR EL ENTORNO DE DEV. Corre a mano:\n   ${notRestored.join("\n   ")}\n`);
+  } else {
+    console.log("Entorno de dev restaurado.");
+  }
+  try { console.log("Limpieza:", JSON.stringify(run("testHelpers:deleteSmokeAuthUsers"))); } catch (e) { console.log(`Limpieza falló: ${e.message.slice(0, 120)}`); }
 }
 console.log(failures === 0 ? "\nTODO OK" : `\n${failures} FALLA(S)`);
 process.exit(failures === 0 ? 0 : 1);

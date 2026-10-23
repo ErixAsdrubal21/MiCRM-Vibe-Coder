@@ -42,6 +42,7 @@ export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
   const [submitting, setSubmitting] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileKey, setTurnstileKey] = useState(0); // el token es de un solo uso: cambiarla vuelve a mostrar la verificación
+  const [turnstileError, setTurnstileError] = useState("");
 
   async function handleRequest(e) {
     e.preventDefault();
@@ -124,7 +125,13 @@ export default function PasswordCodeFlow({ initialEmail = "", onCancel }) {
             </label>
           </div>
           <p className="forgot-help">Te enviaremos un código de 8 dígitos a ese correo.</p>
-          <TurnstileWidget action="password_reset" onToken={setTurnstileToken} resetKey={turnstileKey} />
+          <TurnstileWidget action="password_reset" onToken={setTurnstileToken} onError={setTurnstileError} resetKey={turnstileKey} />
+          {turnstileError && (
+            <>
+              <p style={ERROR_STYLE}>{turnstileError}</p>
+              <button type="button" className="forgot" onClick={() => setTurnstileKey((k) => k + 1)}>Reintentar verificación</button>
+            </>
+          )}
           {error && <p style={ERROR_STYLE}>{error}</p>}
           <Button type="submit" variant="primary" full disabled={submitting || !turnstileToken}>
             {submitting ? "Enviando..." : turnstileToken ? "Enviarme el código" : "Verificando que eres una persona..."}

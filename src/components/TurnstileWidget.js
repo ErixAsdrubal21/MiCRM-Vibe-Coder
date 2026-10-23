@@ -5,8 +5,10 @@ import { turnstileSiteKeyFor } from "../../shared/turnstileKeys.js";
 
 /**
  * ICS-123 — widget de Cloudflare Turnstile. Entrega el token por `onToken`
- * (cadena vacía si vence o falla). El token es de un solo uso: cambia
- * `resetKey` para volver a mostrarlo después de usarlo. La CSP de /login
+ * (cadena vacía si vence o falla) y avisa por `onError` si el script no carga
+ * o Turnstile reporta un error, para que el formulario lo explique y ofrezca
+ * reintentar. El token es de un solo uso: cambia `resetKey` para volver a
+ * mostrarlo (también sirve para reintentar). La CSP de /login
  * permite challenges.cloudflare.com (scripts/generate-headers.mjs).
  */
 const SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
@@ -30,18 +32,24 @@ function loadTurnstile() {
   return scriptPromise;
 }
 
-export default function TurnstileWidget({ action, onToken, resetKey = 0 }) {
+const LOAD_ERROR = "No se pudo cargar la verificación. Revisa tu conexión e intenta de nuevo.";
+const CHALLENGE_ERROR = "La verificación falló. Intenta de nuevo.";
+
+export default function TurnstileWidget({ action, onToken, onError = () => {}, resetKey = 0 }) {
   const containerRef = useRef(null);
   const onTokenRef = useRef(onToken);
+  const onErrorRef = useRef(onError);
 
   useEffect(() => {
     onTokenRef.current = onToken;
-  }, [onToken]);
+    onErrorRef.current = onError;
+  }, [onToken, onError]);
 
   useEffect(() => {
     let widgetId = null;
     let cancelled = false;
     onTokenRef.current("");
+    onErrorRef.current("");
     loadTurnstile()
       .then(() => {
         if (cancelled || !containerRef.current) return;
@@ -49,12 +57,21 @@ export default function TurnstileWidget({ action, onToken, resetKey = 0 }) {
           sitekey: turnstileSiteKeyFor(process.env.NEXT_PUBLIC_CONVEX_URL),
           action,
           language: "es",
-          callback: (token) => onTokenRef.current(token),
+          callback: (token) => {
+            onErrorRef.current("");
+            onTokenRef.current(token);
+          },
           "expired-callback": () => onTokenRef.current(""),
-          "error-callback": () => onTokenRef.current(""),
+          "error-callback": () => {
+            onTokenRef.current("");
+            onErrorRef.current(CHALLENGE_ERROR);
+          },
         });
       })
-      .catch(() => onTokenRef.current(""));
+      .catch(() => {
+        onTokenRef.current("");
+        onErrorRef.current(LOAD_ERROR);
+      });
     return () => {
       cancelled = true;
       if (widgetId !== null && window.turnstile) window.turnstile.remove(widgetId);
