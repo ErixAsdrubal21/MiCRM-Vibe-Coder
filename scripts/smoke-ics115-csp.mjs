@@ -21,7 +21,6 @@
 //   Cuenta delivered+ics115@resend.dev (administrador, para ver todas las
 //   pantallas); se borra al final, incluso si falla.
 
-import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import http from "node:http";

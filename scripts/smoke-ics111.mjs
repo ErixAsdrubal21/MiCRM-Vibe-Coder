@@ -20,12 +20,11 @@
 //   entregar nada real). Se borra al final, incluso si falla, junto con sus
 //   códigos y solicitudes (testHelpers:deleteSmokeAuthUsers).
 
-import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi as api } from "convex/server";
-import { convexRun } from "./convex-run.mjs";
+import { convexEnvSet, convexRun } from "./convex-run.mjs";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) {
@@ -44,8 +43,7 @@ function check(label, ok, detail = "") {
   if (!ok) failures++;
 }
 const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
-const setFailpoint = (name) =>
-  execFileSync("npx", name ? ["convex", "env", "set", "PASSWORD_RESET_FAILPOINT", name] : ["convex", "env", "remove", "PASSWORD_RESET_FAILPOINT"], { stdio: "ignore" });
+const setFailpoint = (name) => convexEnvSet("PASSWORD_RESET_FAILPOINT", name || null); // valida que el destino sea dev (scripts/convex-run.mjs)
 
 const hash = (email, code) => createHash("sha256").update(`${email}:${code}`).digest("hex");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -80,7 +78,11 @@ try {
   const r2 = await errOf(anon().action(api.auth.signIn, { provider: "password", params: { email: GHOST, flow: "reset" } }));
   check("auth:signIn flow=reset deshabilitado igual para cualquier correo", Boolean(r1?.includes("Solo se permite iniciar sesión") && r2?.includes("Solo se permite iniciar sesión")));
 
-  // 2) request: misma respuesta y tiempo exista o no la cuenta
+  // 2) request: misma respuesta y tiempo exista o no la cuenta. Desde ICS-123 cada llamada consulta
+  // a Cloudflare (Turnstile) por internet, y esa variación de red pesa más que la de la base: se
+  // calienta primero y se tolera hasta 250 ms (como las demás pruebas de tiempo). La garantía de
+  // fondo es estructural: request no busca la cuenta antes de responder, solo agenda el trabajo.
+  await timed(() => request(GHOST));
   const tE = [], tG = [], answers = new Set();
   for (let i = 0; i < 6; i++) {
     const g = await timed(() => request(GHOST));
@@ -88,7 +90,7 @@ try {
     tG.push(g.ms); tE.push(e.ms); answers.add(JSON.stringify(g.r)); answers.add(JSON.stringify(e.r));
   }
   check("request responde idéntico exista o no la cuenta", answers.size === 1 && answers.has("null"), [...answers].join(" | "));
-  check("request tarda lo mismo exista o no la cuenta", Math.abs(median(tE) - median(tG)) < 60, `existe ${median(tE).toFixed(0)} ms / no existe ${median(tG).toFixed(0)} ms`);
+  check("request tarda lo mismo exista o no la cuenta", Math.abs(median(tE) - median(tG)) < 250, `existe ${median(tE).toFixed(0)} ms / no existe ${median(tG).toFixed(0)} ms`);
 
   // 3) Intervalo de 60 s: de esas solicitudes solo pasó 1; una bloqueada conserva el código vigente
   await waitFor(() => dump().codes.length === 1, "primer código");

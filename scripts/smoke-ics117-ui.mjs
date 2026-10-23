@@ -16,7 +16,6 @@
 // DATOS
 //   Cuentas delivered+ics117ui*@resend.dev; se borran al final, incluso si falla.
 
-import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import http from "node:http";

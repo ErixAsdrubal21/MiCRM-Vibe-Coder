@@ -21,12 +21,11 @@
 //   Cuentas de prueba delivered+ics117*@resend.dev (dos administradoras y un
 //   vendedor). Se borran al final, incluso si falla.
 
-import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi as api } from "convex/server";
-import { convexRun } from "./convex-run.mjs";
+import { convexEnvSet, convexRun } from "./convex-run.mjs";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) {
@@ -44,8 +43,7 @@ function check(label, ok, detail = "") {
   if (!ok) failures++;
 }
 const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
-const setFailpoint = (name) =>
-  execFileSync("npx", name ? ["convex", "env", "set", "TEST_FAILPOINT", name] : ["convex", "env", "remove", "TEST_FAILPOINT"], { stdio: "ignore" });
+const setFailpoint = (name) => convexEnvSet("TEST_FAILPOINT", name || null); // valida que el destino sea dev (scripts/convex-run.mjs)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const anon = () => new ConvexHttpClient(DEV_URL);
 function authed(token) { const c = new ConvexHttpClient(DEV_URL); c.setAuth(token); return c; }

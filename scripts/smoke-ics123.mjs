@@ -16,11 +16,10 @@
 // USO (se niega a correr contra producción):
 //   node scripts/smoke-ics123.mjs
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi as api } from "convex/server";
-import { convexRun } from "./convex-run.mjs";
+import { convexEnvGet, convexEnvSet, convexRun } from "./convex-run.mjs";
 import { errorMessage } from "../src/lib/errors.js";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
@@ -41,19 +40,11 @@ function check(label, ok, detail = "") {
   if (!ok) failures++;
 }
 const run = convexRun;
-const setEnv = (name, value) =>
-  execFileSync("npx", value === null ? ["convex", "env", "remove", name] : ["convex", "env", "set", name, value], { stdio: "ignore" });
-/** Valor actual de una variable de dev, o null si no existe (se restaura tal cual al final). */
-function getEnv(name) {
-  try {
-    const out = execFileSync("npx", ["convex", "env", "get", name], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-    return out === "" ? null : out;
-  } catch {
-    return null;
-  }
-}
+// Leer y cambiar variables pasa por scripts/convex-run.mjs: valida que el destino sea dev
+// antes de tocar nada, distingue "no existe" de "no se pudo leer" y nunca imprime valores.
+const setEnv = convexEnvSet;
 const TURNSTILE_VARS = ["TURNSTILE_SECRET_KEY", "TURNSTILE_ALLOWED_HOSTNAMES", "TURNSTILE_ALLOW_TEST_KEYS"];
-const originalEnv = Object.fromEntries(TURNSTILE_VARS.map((k) => [k, getEnv(k)]));
+const originalEnv = Object.fromEntries(TURNSTILE_VARS.map((k) => [k, convexEnvGet(k)])); // si no se puede leer, se detiene antes de cambiar nada
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const anon = () => new ConvexHttpClient(DEV_URL);
 const caught = async (p) => { try { await p; return null; } catch (e) { return e; } };
@@ -108,11 +99,12 @@ try {
   const notRestored = [];
   for (const k of TURNSTILE_VARS) {
     const v = originalEnv[k];
-    try { setEnv(k, v); } catch { notRestored.push(v === null ? `npx convex env remove ${k}` : `npx convex env set ${k} ${v}`); }
+    try { setEnv(k, v); } catch { notRestored.push(k); }
   }
   if (notRestored.length) {
     failures++;
-    console.log(`\n⚠️  NO SE PUDO RESTAURAR EL ENTORNO DE DEV. Corre a mano:\n   ${notRestored.join("\n   ")}\n`);
+    // Sin imprimir valores: TURNSTILE_SECRET_KEY puede ser una llave secreta.
+    console.log(`\n⚠️  NO SE PUDO RESTAURAR EL ENTORNO DE DEV: ${notRestored.join(", ")}. Revisa esas variables en el panel de Convex (dev → Settings → Environment Variables); en dev deben ser las llaves de prueba de Cloudflare (ver convex/turnstile.js).\n`);
   } else {
     console.log("Entorno de dev restaurado.");
   }

@@ -15,13 +15,12 @@
 // DATOS
 //   Cuenta delivered+ics111ui@resend.dev; se borra al final, incluso si falla.
 
-import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
-import { convexRun } from "./convex-run.mjs";
+import { convexEnvSet, convexRun } from "./convex-run.mjs";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) throw new Error("Solo contra el deployment de desarrollo.");
@@ -37,7 +36,7 @@ const NEW_PASS = randomBytes(9).toString("base64url");
 let failures = 0;
 const check = (l, ok, d = "") => { console.log(`${ok ? "✔" : "✘"} ${l}${d ? ` — ${d}` : ""}`); if (!ok) failures++; };
 const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
-const setFailpoint = (name) => execFileSync("npx", name ? ["convex", "env", "set", "PASSWORD_RESET_FAILPOINT", name] : ["convex", "env", "remove", "PASSWORD_RESET_FAILPOINT"], { stdio: "ignore" });
+const setFailpoint = (name) => convexEnvSet("PASSWORD_RESET_FAILPOINT", name || null); // valida que el destino sea dev (scripts/convex-run.mjs)
 const hash = (e, c) => createHash("sha256").update(`${e}:${c}`).digest("hex");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const waitText = (p, t, ms = 30000) => p.waitForFunction((x) => document.body.innerText.includes(x), { timeout: ms }, t);

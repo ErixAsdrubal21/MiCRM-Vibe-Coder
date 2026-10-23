@@ -14,7 +14,6 @@
 // DATOS
 //   Cuentas delivered+ics133*@resend.dev; se borran al final, incluso si falla.
 
-import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
