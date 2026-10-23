@@ -26,9 +26,14 @@ function readOptional(file) {
   }
 }
 
+// Variables con las que el CLI de Convex (1.42.x, cli/lib/utils/utils.js) elige otro deployment
+// en vez del de .env.local. Cualquiera de ellas podría apuntar a producción (PR #23).
+const DEPLOYMENT_CREDENTIAL_VARS = ["CONVEX_DEPLOY_KEY", "CONVEX_DEPLOYMENT_TOKEN", "CONVEX_SELF_HOSTED_URL", "CONVEX_SELF_HOSTED_ADMIN_KEY"];
+
 export function assertDevelopmentTarget() {
-  if (process.env.CONVEX_DEPLOY_KEY) {
-    throw new Error("convexRun: hay CONVEX_DEPLOY_KEY en el entorno y podría apuntar a producción. Quítala para correr las pruebas.");
+  const inProcess = DEPLOYMENT_CREDENTIAL_VARS.filter((name) => process.env[name]);
+  if (inProcess.length > 0) {
+    throw new Error(`convexRun: hay ${inProcess.join(", ")} en el entorno y podría apuntar a producción. Quítala para correr las pruebas.`);
   }
   let envLocal = "";
   try {
@@ -36,11 +41,12 @@ export function assertDevelopmentTarget() {
   } catch {
     throw new Error("convexRun: falta .env.local (corre las pruebas desde la raíz del proyecto, con `npx convex dev` configurado).");
   }
-  // El CLI de Convex también carga .env.local y .env: una llave ahí se usaría igual.
-  const deployKeyLine = /^[ \t]*(?:export[ \t]+)?CONVEX_DEPLOY_KEY[ \t]*=[ \t]*\S+/m;
+  // El CLI de Convex también carga .env.local y .env: una credencial ahí se usaría igual.
+  const credentialLine = new RegExp(`^[ \\t]*(?:export[ \\t]+)?(${DEPLOYMENT_CREDENTIAL_VARS.join("|")})[ \\t]*=[ \\t]*\\S+`, "m");
   for (const [file, content] of [[".env.local", envLocal], [".env", readOptional(".env")]]) {
-    if (deployKeyLine.test(content)) {
-      throw new Error(`convexRun: hay CONVEX_DEPLOY_KEY en ${file} y podría apuntar a producción. Quítala para correr las pruebas.`);
+    const found = content.match(credentialLine);
+    if (found) {
+      throw new Error(`convexRun: hay ${found[1]} en ${file} y podría apuntar a producción. Quítala para correr las pruebas.`);
     }
   }
   const deployment = process.env.CONVEX_DEPLOYMENT ?? envLocal.match(/^CONVEX_DEPLOYMENT=(\S+)/m)?.[1] ?? "";
