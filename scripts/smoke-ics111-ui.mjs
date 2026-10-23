@@ -15,13 +15,12 @@
 // DATOS
 //   Cuenta delivered+ics111ui@resend.dev; se borra al final, incluso si falla.
 
-import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
-import { convexRun } from "./convex-run.mjs";
+import { convexEnvSet, convexRun } from "./convex-run.mjs";
 
 const DEV_URL = readFileSync(".env.local", "utf8").match(/NEXT_PUBLIC_CONVEX_URL=(\S+)/)?.[1] ?? "";
 if (!DEV_URL || DEV_URL.includes("perfect-crocodile-599")) throw new Error("Solo contra el deployment de desarrollo.");
@@ -37,7 +36,7 @@ const NEW_PASS = randomBytes(9).toString("base64url");
 let failures = 0;
 const check = (l, ok, d = "") => { console.log(`${ok ? "✔" : "✘"} ${l}${d ? ` — ${d}` : ""}`); if (!ok) failures++; };
 const run = convexRun; // nunca imprime los argumentos si falla (scripts/convex-run.mjs)
-const setFailpoint = (name) => execFileSync("npx", name ? ["convex", "env", "set", "PASSWORD_RESET_FAILPOINT", name] : ["convex", "env", "remove", "PASSWORD_RESET_FAILPOINT"], { stdio: "ignore" });
+const setFailpoint = (name) => convexEnvSet("PASSWORD_RESET_FAILPOINT", name || null); // valida que el destino sea dev (scripts/convex-run.mjs)
 const hash = (e, c) => createHash("sha256").update(`${e}:${c}`).digest("hex");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const waitText = (p, t, ms = 30000) => p.waitForFunction((x) => document.body.innerText.includes(x), { timeout: ms }, t);
@@ -75,6 +74,10 @@ try {
   await click(p, "Olvidé mi contraseña");
   await waitText(p, "Recupera tu contraseña");
   check("Pantalla 1 con el correo del login precargado", (await p.$eval("#pc-email", (e) => e.value)) === EMAIL);
+  // ICS-123: sin la verificación de Turnstile el botón está deshabilitado; con la llave de prueba se aprueba sola.
+  check("Pantalla 1: el botón espera la verificación de Turnstile", await has(p, "Verificando que eres una persona") || await has(p, "Enviarme el código"));
+  await waitText(p, "Enviarme el código", 60000);
+  check("Turnstile aprueba y habilita el botón", true);
   await submit(p);
   await waitText(p, "Escribe tu código");
   check("Pantalla 2: aviso genérico (no confirma que la cuenta exista)", await has(p, `Si ${EMAIL} tiene acceso al CRM`));
@@ -120,6 +123,21 @@ try {
   await click(p2, "Olvidé mi contraseña");
   await click(p2, "Volver a iniciar sesión");
   check("'Volver a iniciar sesión' regresa al login", Boolean(await p2.$("#pass")));
+  // ICS-123: si la verificación de Cloudflare no carga, se explica y se puede reintentar
+  const p3 = await (await browser.createBrowserContext()).newPage();
+  await p3.setRequestInterception(true);
+  let blockTurnstile = true;
+  p3.on("request", (r) => (blockTurnstile && r.url().startsWith("https://challenges.cloudflare.com/") ? r.abort() : r.continue()));
+  await p3.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await p3.waitForSelector("#email", { timeout: 30000 });
+  await click(p3, "Olvidé mi contraseña");
+  await waitText(p3, "No se pudo cargar la verificación");
+  check("Si Turnstile no carga, lo explica y ofrece reintentar", await has(p3, "Reintentar verificación"));
+  blockTurnstile = false;
+  await click(p3, "Reintentar verificación");
+  await waitText(p3, "Enviarme el código", 60000);
+  check("…y al reintentar con conexión, la verificación aprueba", !(await has(p3, "No se pudo cargar la verificación")));
+
   check("Sin errores de JavaScript", errors.length === 0, errors.join(" | "));
 } catch (e) {
   failures++;

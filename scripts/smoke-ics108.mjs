@@ -20,7 +20,6 @@
 //   Crea filas `users` con correos `smoke-ics108…` y las borra al final
 //   (incluso si falla) con testHelpers:deleteSmokeAuthUsers.
 
-import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { googleProfileOrReject } from "../convex/auth.js";
 import { convexRun } from "./convex-run.mjs";

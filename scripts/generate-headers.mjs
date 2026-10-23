@@ -67,10 +67,16 @@ function routeOf(file) {
   return `/${rel.replace(/\/index$/, "")}`;
 }
 
-function csp(scriptHashes) {
+// ICS-123: Cloudflare Turnstile (script + iframe) solo donde se usa: la pantalla de login
+// ("Olvidé mi contraseña" está dentro de /login).
+const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+const TURNSTILE_ROUTES = new Set(["/login"]);
+
+function csp(scriptHashes, route) {
+  const turnstile = TURNSTILE_ROUTES.has(route);
   return [
     "default-src 'self'",
-    `script-src 'self' ${scriptHashes.join(" ")}`.trim(),
+    `script-src 'self' ${turnstile ? `${TURNSTILE_ORIGIN} ` : ""}${scriptHashes.join(" ")}`.trim(),
     // React escribe atributos `style="..."` en el HTML prerenderizado; sin
     // 'unsafe-inline' aquí se perderían estilos. El riesgo de estilos inline es
     // mucho menor que el de scripts.
@@ -78,7 +84,7 @@ function csp(scriptHashes) {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
     `connect-src 'self' https://${convexHost} wss://${convexHost}`,
-    "frame-src 'none'",
+    turnstile ? `frame-src ${TURNSTILE_ORIGIN}` : "frame-src 'none'",
     "object-src 'none'",
     "worker-src 'self'",
     "manifest-src 'self'",
@@ -107,7 +113,7 @@ const files = htmlFiles(OUT).filter((f) => !SKIP.has(path.relative(OUT, f)));
 if (files.length + 1 > MAX_RULES) throw new Error(`generate-headers: ${files.length + 1} reglas, el máximo es ${MAX_RULES}.`);
 
 for (const file of files.sort()) {
-  const header = `  ${cspHeader}: ${csp(inlineScriptHashes(readFileSync(file, "utf8")))}`;
+  const header = `  ${cspHeader}: ${csp(inlineScriptHashes(readFileSync(file, "utf8")), routeOf(file))}`;
   if (header.length > MAX_LINE) throw new Error(`generate-headers: la CSP de ${routeOf(file)} mide ${header.length} caracteres (máx. ${MAX_LINE}).`);
   lines.push("", routeOf(file), header);
 }

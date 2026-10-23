@@ -28,6 +28,7 @@ import type * as securityEvents from "../securityEvents.js";
 import type * as seedDemo from "../seedDemo.js";
 import type * as testHelpers from "../testHelpers.js";
 import type * as timeline from "../timeline.js";
+import type * as turnstile from "../turnstile.js";
 import type * as users from "../users.js";
 import type * as validators from "../validators.js";
 
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   seedDemo: typeof seedDemo;
   testHelpers: typeof testHelpers;
   timeline: typeof timeline;
+  turnstile: typeof turnstile;
   users: typeof users;
   validators: typeof validators;
 }>;

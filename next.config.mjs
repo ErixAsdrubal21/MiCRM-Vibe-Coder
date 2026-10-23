@@ -1,3 +1,5 @@
+import { turnstileSiteKeyFor } from "./shared/turnstileKeys.js";
+
 /**
  * Sitio estático (`next build` → carpeta `out/`) para Cloudflare Pages. El
  * backend y la autenticación siguen en Convex; el navegador habla directo con
@@ -12,6 +14,12 @@ if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
   throw new Error(
     "Falta NEXT_PUBLIC_CONVEX_URL. Compila con `npx convex deploy --cmd 'npm run build'` o define la variable (local: .env.local).",
   );
+}
+
+// ICS-123: un build para producción sin la llave pública real de Turnstile dejaría
+// "Olvidé mi contraseña" sin poder pedir códigos. Se detiene aquí a propósito.
+if (turnstileSiteKeyFor(process.env.NEXT_PUBLIC_CONVEX_URL) === "") {
+  throw new Error("Falta TURNSTILE_PROD_SITE_KEY en shared/turnstileKeys.js para compilar contra producción.");
 }
 
 /** @type {import('next').NextConfig} */

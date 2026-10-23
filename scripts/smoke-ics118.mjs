@@ -19,7 +19,6 @@
 //   Cuentas delivered+ics118*@resend.dev (una administradora y un vendedor).
 //   Se borran al final, incluso si falla.
 
-import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
