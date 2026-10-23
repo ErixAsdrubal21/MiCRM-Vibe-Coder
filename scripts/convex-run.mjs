@@ -41,8 +41,11 @@ export function assertDevelopmentTarget() {
   } catch {
     throw new Error("convexRun: falta .env.local (corre las pruebas desde la raíz del proyecto, con `npx convex dev` configurado).");
   }
-  // El CLI de Convex también carga .env.local y .env: una credencial ahí se usaría igual.
-  const credentialLine = new RegExp(`^[ \\t]*(?:export[ \\t]+)?(${DEPLOYMENT_CREDENTIAL_VARS.join("|")})[ \\t]*=[ \\t]*\\S+`, "m");
+  // El CLI de Convex también carga .env.local y .env (con dotenv, que acepta `CLAVE=valor` y
+  // `CLAVE: valor`, con o sin `export`): una credencial ahí se usaría igual. Para no depender de
+  // los detalles de dotenv, se bloquea cualquier línea que asigne una de esas variables con `=` o
+  // `:`, aunque el valor esté vacío —más estricto que lo que dotenv cargaría— (PR #23).
+  const credentialLine = new RegExp(`^[ \\t]*(?:export[ \\t]+)?(${DEPLOYMENT_CREDENTIAL_VARS.join("|")})[ \\t]*[=:]`, "m");
   for (const [file, content] of [[".env.local", envLocal], [".env", readOptional(".env")]]) {
     const found = content.match(credentialLine);
     if (found) {
