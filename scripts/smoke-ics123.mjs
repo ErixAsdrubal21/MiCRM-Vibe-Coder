@@ -5,7 +5,8 @@
 // En dev se usan las llaves de prueba oficiales de Cloudflare: con
 // TURNSTILE_SECRET_KEY=1x…AA cualquier token aprueba; 2x…AA siempre rechaza;
 // 3x…AA responde "timeout-or-duplicate" (vencido o ya usado). La prueba cambia
-// temporalmente variables de entorno de dev y las restaura al final.
+// temporalmente variables de entorno de dev y al final restaura los valores
+// que tenían al empezar (o las quita si no existían).
 //
 // Comprueba: la mutation vieja sin captcha ya no es pública; sin token, con
 // token rechazado, vencido/usado, de otro dominio o con llave de prueba no
@@ -42,6 +43,17 @@ function check(label, ok, detail = "") {
 const run = convexRun;
 const setEnv = (name, value) =>
   execFileSync("npx", value === null ? ["convex", "env", "remove", name] : ["convex", "env", "set", name, value], { stdio: "ignore" });
+/** Valor actual de una variable de dev, o null si no existe (se restaura tal cual al final). */
+function getEnv(name) {
+  try {
+    const out = execFileSync("npx", ["convex", "env", "get", name], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    return out === "" ? null : out;
+  } catch {
+    return null;
+  }
+}
+const TURNSTILE_VARS = ["TURNSTILE_SECRET_KEY", "TURNSTILE_ALLOWED_HOSTNAMES", "TURNSTILE_ALLOW_TEST_KEYS"];
+const originalEnv = Object.fromEntries(TURNSTILE_VARS.map((k) => [k, getEnv(k)]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const anon = () => new ConvexHttpClient(DEV_URL);
 const caught = async (p) => { try { await p; return null; } catch (e) { return e; } };
@@ -56,6 +68,11 @@ async function expectRejected(label, turnstileToken) {
 }
 
 try {
+  // La prueba necesita las llaves de prueba de Cloudflare; si dev tenía otras, las restaura al final.
+  setEnv("TURNSTILE_SECRET_KEY", PASS_KEY);
+  setEnv("TURNSTILE_ALLOWED_HOSTNAMES", "example.com");
+  setEnv("TURNSTILE_ALLOW_TEST_KEYS", "true");
+  await sleep(2500);
   run("testHelpers:deleteSmokeAuthUsers");
   run("testHelpers:insertSmokeAuthUser", { email: EMAIL, role: "vendedor" });
   run("users:provisionPassword", { email: EMAIL, password: "contraseña-de-prueba-larga" });
@@ -89,8 +106,9 @@ try {
   // Restaurar el entorno de dev. Si falla (p. ej. sin conexión), avisarlo en grande: una llave
   // que siempre rechaza dejaría "Olvidé mi contraseña" inservible en dev (ya pasó una vez).
   const notRestored = [];
-  for (const [k, v] of [["TURNSTILE_SECRET_KEY", PASS_KEY], ["TURNSTILE_ALLOWED_HOSTNAMES", "example.com"], ["TURNSTILE_ALLOW_TEST_KEYS", "true"]]) {
-    try { setEnv(k, v); } catch { notRestored.push(`npx convex env set ${k} ${v}`); }
+  for (const k of TURNSTILE_VARS) {
+    const v = originalEnv[k];
+    try { setEnv(k, v); } catch { notRestored.push(v === null ? `npx convex env remove ${k}` : `npx convex env set ${k} ${v}`); }
   }
   if (notRestored.length) {
     failures++;
@@ -98,7 +116,12 @@ try {
   } else {
     console.log("Entorno de dev restaurado.");
   }
-  try { console.log("Limpieza:", JSON.stringify(run("testHelpers:deleteSmokeAuthUsers"))); } catch (e) { console.log(`Limpieza falló: ${e.message.slice(0, 120)}`); }
+  try {
+    console.log("Limpieza:", JSON.stringify(run("testHelpers:deleteSmokeAuthUsers")));
+  } catch (e) {
+    failures++;
+    console.log(`⚠️  La limpieza falló; borra a mano los datos de prueba con: npx convex run testHelpers:deleteSmokeAuthUsers — ${e.message.slice(0, 120)}`);
+  }
 }
 console.log(failures === 0 ? "\nTODO OK" : `\n${failures} FALLA(S)`);
 process.exit(failures === 0 ? 0 : 1);
