@@ -32,7 +32,12 @@ function toResults(response) {
     .filter((r) => r.url && isSafeLink(r.url))
     .map((r) => {
       const source = websiteHost(r.url);
-      const snippet = (r.highlights ?? []).join(" … ").replace(/\s+/g, " ").trim().slice(0, SNIPPET_MAX);
+      const snippet = (r.highlights ?? [])
+        .join(" … ")
+        .replace(/(^|\s)#{1,6}\s+/g, "$1") // títulos markdown de la página ("# Grupo Bimbo")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, SNIPPET_MAX);
       return {
         title: (r.title ?? "").trim() || source,
         url: r.url,
