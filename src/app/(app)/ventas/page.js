@@ -12,6 +12,7 @@ import { PeriodToggle } from "@/design/components/core/PeriodToggle.jsx";
 import { useSession } from "@/lib/session.js";
 import "./ventas.css";
 import { prospectoHref, ventaHref } from "@/lib/routes.js";
+import { todayISO } from "@/lib/dates.js";
 
 /**
  * ICS-103 — pantalla global /ventas: dos vistas conmutables sobre
@@ -91,7 +92,7 @@ export default function Ventas() {
         o.expectedCloseDate ?? "",
       ]),
     ];
-    downloadCsv(`oportunidades-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    downloadCsv(`oportunidades-${todayISO()}.csv`, rows);
   }
   function exportSalesCsv() {
     const rows = [
@@ -104,7 +105,7 @@ export default function Ventas() {
         s.voidedAt ? "sí" : "no",
       ]),
     ];
-    downloadCsv(`ventas-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    downloadCsv(`ventas-${todayISO()}.csv`, rows);
   }
 
   const oppEmpty = opportunities.results.length === 0 && opportunities.status !== "LoadingFirstPage";
@@ -162,9 +163,12 @@ export default function Ventas() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-            <Button variant="secondary" onClick={() => router.push("/ventas/nueva-oportunidad")}>
-              + Nueva oportunidad
-            </Button>
+            {/* ICS-136: crear es solo de vendedor; la administradora ve en modo lectura. */}
+            {session?.role === "vendedor" && (
+              <Button variant="secondary" onClick={() => router.push("/ventas/nueva-oportunidad")}>
+                + Nueva oportunidad
+              </Button>
+            )}
 
             {oppEmpty ? (
               <p className="empty-state">Sin oportunidades{stageFilter ? " en esta etapa" : ""}.</p>
@@ -214,9 +218,12 @@ export default function Ventas() {
           </label>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-            <Button variant="secondary" onClick={() => router.push("/ventas/nueva-venta")}>
-              + Registrar venta directa
-            </Button>
+            {/* ICS-136: crear es solo de vendedor; la administradora ve en modo lectura. */}
+            {session?.role === "vendedor" && (
+              <Button variant="secondary" onClick={() => router.push("/ventas/nueva-venta")}>
+                + Registrar venta directa
+              </Button>
+            )}
 
             {salesEmpty ? (
               <p className="empty-state">Sin ventas registradas.</p>

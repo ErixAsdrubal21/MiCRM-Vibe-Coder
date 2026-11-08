@@ -9,7 +9,7 @@ import { Badge } from "@/design/components/core/Badge.jsx";
 import { Tag } from "@/design/components/core/Tag.jsx";
 import { PeriodToggle } from "@/design/components/core/PeriodToggle.jsx";
 import { useSession } from "@/lib/session.js";
-import { isoToLocalMs } from "@/lib/dates.js";
+import { isoToLocalMs, todayISO } from "@/lib/dates.js";
 import {
   CONTACT_TYPE_VALUES,
   CONTACT_TYPE_LABELS,
@@ -190,7 +190,7 @@ export default function Actividad() {
           if (res.isDone) break;
           cursor = res.continueCursor;
         }
-        downloadCsv(`actividad-interacciones-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+        downloadCsv(`actividad-interacciones-${todayISO()}.csv`, rows);
       } else {
         rows.push(["Prospecto", "Fecha", "Tipo", "Estado", "Resolución"]);
         while (page < MAX_EXPORT_PAGES) {
@@ -212,7 +212,7 @@ export default function Actividad() {
           if (res.isDone) break;
           cursor = res.continueCursor;
         }
-        downloadCsv(`actividad-seguimientos-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+        downloadCsv(`actividad-seguimientos-${todayISO()}.csv`, rows);
       }
     } finally {
       setExporting(false);

@@ -31,13 +31,20 @@ import { contactType, followUpType, resolution } from "./validators.js";
 export const today = query({
   args: {},
   handler: async (ctx) => {
-    await requireAuthenticatedUser(ctx);
+    const user = await requireAuthenticatedUser(ctx);
     const cutoff = endOfBusinessTodayMs();
 
-    const pending = await ctx.db
-      .query("followUps")
-      .withIndex("by_status_and_date", (q) => q.eq("status", "pendiente").lt("at", cutoff))
-      .collect();
+    // ICS-135: un vendedor solo ve los seguimientos de su cartera (`ownerId`, ICS-78).
+    const pending =
+      user.role === "vendedor"
+        ? await ctx.db
+            .query("followUps")
+            .withIndex("by_owner_status_and_date", (q) => q.eq("ownerId", user._id).eq("status", "pendiente").lt("at", cutoff))
+            .collect()
+        : await ctx.db
+            .query("followUps")
+            .withIndex("by_status_and_date", (q) => q.eq("status", "pendiente").lt("at", cutoff))
+            .collect();
 
     const rows = await Promise.all(
       pending.map(async (followUp) => {

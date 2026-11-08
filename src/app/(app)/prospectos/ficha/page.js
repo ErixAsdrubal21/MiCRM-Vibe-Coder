@@ -43,9 +43,12 @@ export default function FichaProspecto() {
   const session = useSession();
   const prospectResult = useQuery(api.prospects.get, id ? { id } : "skip");
   const prospect = id ? prospectResult : null;
-  const timeline = usePaginatedQuery(api.timeline.listByProspect, id ? { prospectId: id } : "skip", { initialNumItems: 15 });
-  const opportunities = usePaginatedQuery(api.opportunities.listByProspect, id ? { prospectId: id } : "skip", { initialNumItems: 5 });
-  const sales = usePaginatedQuery(api.sales.listByProspect, id ? { prospectId: id } : "skip", { initialNumItems: 5 });
+  // ICS-135: las listas esperan a que `get` confirme que el prospecto existe y se
+  // puede leer — con uno ajeno `get` devuelve null y estas queries lanzarían, tirando la página.
+  const detailArgs = prospect ? { prospectId: prospect._id } : "skip";
+  const timeline = usePaginatedQuery(api.timeline.listByProspect, detailArgs, { initialNumItems: 15 });
+  const opportunities = usePaginatedQuery(api.opportunities.listByProspect, detailArgs, { initialNumItems: 5 });
+  const sales = usePaginatedQuery(api.sales.listByProspect, detailArgs, { initialNumItems: 5 });
   const updateProspect = useMutation(api.prospects.update);
   const editInteraction = useMutation(api.interactions.edit);
   const removeInteraction = useMutation(api.interactions.remove);
@@ -116,7 +119,7 @@ export default function FichaProspecto() {
       <div className="top-bar">
         <div className="top-bar__back">
           <IconButton icon="arrow-left" outline label="Volver" onClick={() => router.push("/prospectos")} />
-          <p className="top-bar__title" style={{ fontSize: 18 }}>Prospecto no encontrado</p>
+          <p className="top-bar__title" style={{ fontSize: 18 }}>Prospecto no encontrado o sin acceso</p>
         </div>
       </div>
     );

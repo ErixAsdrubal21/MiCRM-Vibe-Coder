@@ -5,10 +5,11 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { PeriodToggle } from "@/design/components/core/PeriodToggle.jsx";
-import { useSession } from "@/lib/session.js";
+import { useRequireRole, useSession } from "@/lib/session.js";
 import { LOSS_REASONS } from "@/lib/prospects.js";
 import { OPPORTUNITY_STAGE_LABELS, CONTACT_TYPE_LABELS } from "../../../../shared/crmEnums.js";
 import "./reportes.css";
+import { todayISO } from "@/lib/dates.js";
 
 const PERIOD_LABEL = { semana: "esta semana", mes: "este mes" };
 const REASON_LABEL = Object.fromEntries(LOSS_REASONS.map((r) => [r.value, r.label]));
@@ -71,14 +72,14 @@ function exportCsv(data, period) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `reporte-${period}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `reporte-${period}-${todayISO()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
 export default function Reportes() {
   const session = useSession();
-  const isAdministrador = session?.role === "administrador";
+  const isAdministrador = useRequireRole(session, "administrador");
   const [period, setPeriod] = useState("semana");
   const data = useQuery(api.metrics.reportes, isAdministrador ? { period } : "skip");
 
@@ -110,7 +111,7 @@ export default function Reportes() {
             {data.ventas.detalle.length > 0 && (
               <div className="report-detail">
                 {data.ventas.detalle.map((s) => (
-                  <div className="report-detail__row" key={s.prospectId + s.closedAt}>
+                  <div className="report-detail__row" key={s._id}>
                     <span>{s.name}</span>
                     <span>{money(s.amount)} · {s.product}</span>
                   </div>

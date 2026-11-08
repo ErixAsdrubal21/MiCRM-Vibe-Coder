@@ -1,7 +1,7 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { requireAuthenticatedUser } from "./permissions";
+import { requireProspectRead } from "./permissions";
 import { hydrateByIds } from "./pagination";
 
 /**
@@ -23,7 +23,8 @@ const nameOf = (users, id) => (id && users.get(id)?.name) || null;
 export const listByProspect = query({
   args: { prospectId: v.id("prospects"), paginationOpts: paginationOptsValidator },
   handler: async (ctx, { prospectId, paginationOpts }) => {
-    await requireAuthenticatedUser(ctx);
+    // ICS-135: mismo aislamiento de lectura que oportunidades y ventas de la ficha.
+    await requireProspectRead(ctx, prospectId);
 
     const result = await ctx.db
       .query("timelineEvents")
