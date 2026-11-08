@@ -31,6 +31,8 @@ textarea.mn-field-text {
 .chip.selected { background: var(--color-accent-tint); color: var(--color-accent-pressed); border-color: var(--color-accent); }
 
 .chip-row--scroll { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+/* ICS-137: en una fila con scroll el chip no se encoge ni parte su texto en renglones. */
+.chip-row--scroll .chip { flex-shrink: 0; white-space: nowrap; }
 .chip--filter { background: var(--color-surface-sunken); }
 .chip--filter.selected { background: var(--color-ink); color: var(--color-canvas); border-color: transparent; }
 

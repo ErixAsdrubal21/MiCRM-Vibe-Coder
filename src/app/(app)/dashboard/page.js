@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import TopBar from "@/nav/TopBar.js";
 import { KpiTile } from "@/design/components/core/KpiTile.jsx";
-import { useSession } from "@/lib/session.js";
+import { useRequireRole, useSession } from "@/lib/session.js";
 import "./dashboard.css";
 
 function money(n) {
@@ -25,7 +25,7 @@ function weekRangeLabel() {
 
 export default function Dashboard() {
   const session = useSession();
-  const isAdministrador = session?.role === "administrador";
+  const isAdministrador = useRequireRole(session, "administrador");
   const data = useQuery(api.metrics.dashboard, isAdministrador ? {} : "skip");
 
   if (!isAdministrador) return null;
@@ -54,7 +54,7 @@ export default function Dashboard() {
             <Link href="/prospectos?risk=1" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
               <KpiTile value={data.atRiskCount} label="Sin seguimiento" warn={data.atRiskCount > 0} />
             </Link>
-            <KpiTile value={`${data.tasksToday.completadas}/${data.tasksToday.total}`} label={`Tareas de ${data.carlos?.name ?? "el vendedor"} hoy`} />
+            <KpiTile value={`${data.tasksToday.completadas}/${data.tasksToday.total}`} label="Tareas del equipo hoy" />
           </div>
 
           {/* ICS-87 — actividad y cumplimiento de seguimiento del equipo. */}

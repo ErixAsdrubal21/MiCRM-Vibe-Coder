@@ -8,7 +8,7 @@ import { Icon } from "@/design/components/core/Icon.jsx";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
 import { Button } from "@/design/components/core/Button.jsx";
 import { Badge } from "@/design/components/core/Badge.jsx";
-import { useSession, homePathForRole } from "@/lib/session.js";
+import { useRequireRole, useSession } from "@/lib/session.js";
 import { todayISO } from "@/lib/dates.js";
 import { prospectoHref } from "@/lib/routes.js";
 import { errorMessage } from "@/lib/errors.js";
@@ -25,6 +25,7 @@ export default function NuevaOportunidad() {
   const searchParams = useSearchParams();
   const preselectedId = searchParams.get("prospect");
   const session = useSession();
+  const isVendedor = useRequireRole(session, "vendedor");
   const prospectsData = useQuery(api.prospects.listMine, session?.role === "vendedor" ? {} : "skip");
   const createOpportunity = useMutation(api.opportunities.create);
 
@@ -51,11 +52,7 @@ export default function NuevaOportunidad() {
     return all.filter((p) => p.name.toLowerCase().includes(q));
   }, [prospectsData, query]);
 
-  if (session === undefined) return null;
-  if (session === null || session.role !== "vendedor") {
-    if (session) router.replace(homePathForRole(session.role));
-    return null;
-  }
+  if (!isVendedor) return null;
 
   async function handleSubmit(e) {
     e.preventDefault();

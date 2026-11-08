@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import { requireAuthenticatedUser, requireVendedor, requireOwnedProspect } from "./permissions";
+import { canReadProspect, requireAuthenticatedUser, requireVendedor, requireOwnedProspect } from "./permissions";
 import { lastContactAt, pendingFollowUp, recordTimelineEvent } from "./lib";
 import { channel, stage, lossReason } from "./validators.js";
 import { OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
@@ -66,10 +66,10 @@ export const listMine = query({
 export const search = query({
   args: { query: v.string() },
   handler: async (ctx, { query: term }) => {
-    await requireAuthenticatedUser(ctx);
+    const user = await requireAuthenticatedUser(ctx);
     const needle = term.trim().toLowerCase();
     if (needle === "") return [];
-    const prospects = await ctx.db.query("prospects").collect();
+    const prospects = await readableProspects(ctx, user);
     return prospects
       .filter((p) => p.name.toLowerCase().includes(needle))
       .slice(0, 10)
@@ -77,12 +77,19 @@ export const search = query({
   },
 });
 
+/** ICS-135 — prospectos que el usuario puede leer: vendedor, su cartera (índice `by_owner`); administrador, todos. */
+function readableProspects(ctx, user) {
+  return user.role === "vendedor"
+    ? ctx.db.query("prospects").withIndex("by_owner", (q) => q.eq("ownerId", user._id)).collect()
+    : ctx.db.query("prospects").collect();
+}
+
 /** ICS-14 Pipeline: prospectos crudos, sin joins — daysInStage se calcula en el cliente desde stageChangedAt. */
 export const pipeline = query({
   args: {},
   handler: async (ctx) => {
-    await requireAuthenticatedUser(ctx);
-    return ctx.db.query("prospects").collect();
+    const user = await requireAuthenticatedUser(ctx);
+    return readableProspects(ctx, user);
   },
 });
 
@@ -100,18 +107,20 @@ export const pipeline = query({
  * ICS-104) para el detalle. Todo acotado a ESTA relación, nunca a la tabla
  * completa — mismo principio que evitó el array ilimitado de interacciones.
  *
- * ICS-94: a propósito NO usa `requireOwnedProspect` — la lectura de la ficha
- * sigue abierta a ambos roles (el PRD es explícito: "Marta puede verla pero
- * no registrar interacciones"). El aislamiento de cartera de ICS-94 es sobre
- * ESCRITURA (`update`/`changeStage`/interacciones/seguimientos) y sobre la
- * pantalla `/prospectos` (lista), no sobre poder abrir una ficha por id.
+ * ICS-94 / ICS-135: no usa `requireOwnedProspect` porque la administradora
+ * también lee la ficha (el PRD: "Marta puede verla pero no registrar
+ * interacciones"). Un vendedor solo lee las de su cartera: con un prospecto
+ * ajeno la query devuelve `null` (como si no existiera) en vez de lanzar, para
+ * que la ficha muestre su estado vacío sin caerse. Antes de ICS-135 la lectura
+ * por id quedaba abierta y la ficha se caía al pedir oportunidades/ventas.
  */
 export const get = query({
   args: { id: v.id("prospects") },
   handler: async (ctx, { id }) => {
-    await requireAuthenticatedUser(ctx);
+    const user = await requireAuthenticatedUser(ctx);
     const prospect = await ctx.db.get(id);
-    if (!prospect) return null;
+    // ICS-135: ajeno = "no encontrado" para el vendedor (null, no error: la ficha muestra su estado vacío).
+    if (!prospect || !canReadProspect(user, prospect)) return null;
     const nextFollowUp = await pendingFollowUp(ctx, id);
 
     const opportunities = await ctx.db

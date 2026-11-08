@@ -141,11 +141,19 @@ async function main() {
     await assertRejects(other.query(anyApi.opportunities.listByProspect, { prospectId: p1._id, paginationOpts: { numItems: 10, cursor: null } }), "5) listByProspect (opportunities) ajeno debe rechazar");
     await assertRejects(other.query(anyApi.sales.listByProspect, { prospectId: p1._id, paginationOpts: { numItems: 10, cursor: null } }), "5) listByProspect (sales) ajeno debe rechazar");
     await assertRejects(other.query(anyApi.sales.getById, { id: direct1._id }), "5) getById ajeno debe rechazar");
+    // ICS-135 — aislamiento de LECTURA: ficha, historial, embudo, buscador y tareas.
+    await assertRejects(other.query(anyApi.timeline.listByProspect, { prospectId: p1._id, paginationOpts: { numItems: 10, cursor: null } }), "5) timeline ajeno debe rechazar");
+    assert((await other.query(anyApi.prospects.get, { id: p1._id })) === null, "5) prospects.get ajeno devuelve null");
+    assert(!(await other.query(anyApi.prospects.pipeline, {})).some((p) => p._id === p1._id), "5) el embudo no incluye prospectos ajenos");
+    assert(!(await other.query(anyApi.prospects.search, { query: PREFIX })).some((p) => p._id === p1._id), "5) el buscador no incluye prospectos ajenos");
+    assert(!(await other.query(anyApi.followUps.today, {})).some((t) => t.prospect._id === p1._id), "5) tareas de hoy no incluye prospectos ajenos");
   } else {
     console.log("(sin SMOKE_OTHER_VENDOR_EMAIL/PASSWORD — se omite 5, autorización cruzada)");
   }
   const asAdmin = await adminClient.query(anyApi.opportunities.listByProspect, { prospectId: p1._id, paginationOpts: { numItems: 10, cursor: null } });
   assert(asAdmin.page.length > 0, "5) admin lee cualquier prospecto");
+  assert((await adminClient.query(anyApi.prospects.get, { id: p1._id }))?._id === p1._id, "5) admin lee la ficha de cualquier prospecto");
+  assert((await adminClient.query(anyApi.prospects.pipeline, {})).some((p) => p._id === p1._id), "5) el embudo de admin incluye todo");
 
   // --- 6) validaciones ---
   await assertRejects(vendor.mutation(anyApi.opportunities.win, { id: opp1._id, amount: 1, closedDate: "2099-01-01" }), "6) closedDate futura debe rechazar (ya cerrada, pero valida antes) ");

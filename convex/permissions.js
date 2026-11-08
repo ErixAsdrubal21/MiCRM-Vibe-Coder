@@ -89,7 +89,12 @@ export async function requireOwnedProspect(ctx, prospectId) {
 export async function requireProspectRead(ctx, prospectId) {
   const user = await requireAuthenticatedUser(ctx);
   const prospect = await requireProspect(ctx, prospectId);
-  if (user.role === "administrador") return { user, prospect };
-  if (user.role === "vendedor" && prospect.ownerId === user._id) return { user, prospect };
+  if (canReadProspect(user, prospect)) return { user, prospect };
   throw new ConvexError("No puedes ver la información de este prospecto.");
+}
+
+/** ICS-135 — regla de lectura de cartera: administrador lee todo; vendedor solo lo suyo. */
+export function canReadProspect(user, prospect) {
+  if (user.role === "administrador") return true;
+  return user.role === "vendedor" && prospect.ownerId === user._id;
 }

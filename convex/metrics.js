@@ -213,13 +213,14 @@ async function countAtRisk(ctx, activeProspects) {
 }
 
 /**
- * Bloque "Carlos" del dashboard: su tasa de conversión de la semana + sus
- * tareas de hoy. Devuelve `carlos: null` si no hay exactamente un vendedor
- * (MVP de un solo vendedor, ver comentario de `dashboard` abajo).
+ * Bloque "Carlos" del dashboard: su tasa de conversión de la semana.
+ * Devuelve `carlos: null` si no hay exactamente un vendedor (MVP de un solo
+ * vendedor, ver comentario de `dashboard` abajo). Las tareas de hoy ya no
+ * salen de aquí: son del equipo completo (ICS-137).
  */
-async function computeCarlosBlock(ctx, vendedores, prospects, followUps, week, now) {
+async function computeCarlosBlock(ctx, vendedores, prospects, week, now) {
   if (vendedores.length !== 1) {
-    return { carlos: null, todayTasks: { completadas: 0, total: 0 } };
+    return null;
   }
   const vendedorId = vendedores[0]._id;
   const ownedProspectIds = new Set(prospects.filter((p) => p.ownerId === vendedorId).map((p) => p._id));
@@ -228,10 +229,7 @@ async function computeCarlosBlock(ctx, vendedores, prospects, followUps, week, n
     ctx.db.query("sales").withIndex("by_closedBy", (q) => q.eq("closedBy", vendedorId).gte("closedAt", week.currentStart)).collect(),
   ]);
   const stats = statsFor(ownedProspectIds, interactions, vendorSales, week.currentStart, now + 1);
-  return {
-    carlos: { name: vendedores[0].name, conversionThisWeek: stats.tasaConversion },
-    todayTasks: tasksToday(followUps, ownedProspectIds, now),
-  };
+  return { name: vendedores[0].name, conversionThisWeek: stats.tasaConversion };
 }
 
 function groupByLossReason(lostProspects) {
@@ -317,10 +315,12 @@ export const dashboard = query({
     const salesThisMonth = activeSales.filter((s) => inWindow(s.closedAt, month.currentStart, now)).length;
     const vendedores = users.filter((u) => u.role === "vendedor");
 
-    const [atRiskCount, { carlos, todayTasks }] = await Promise.all([
+    const [atRiskCount, carlos] = await Promise.all([
       countAtRisk(ctx, active),
-      computeCarlosBlock(ctx, vendedores, prospects, followUps, week, now),
+      computeCarlosBlock(ctx, vendedores, prospects, week, now),
     ]);
+    // ICS-137: tareas de hoy de TODO el equipo (antes solo con exactamente un vendedor; con más salía 0/0).
+    const todayTasks = tasksToday(followUps, new Set(prospects.map((p) => p._id)), now);
 
     // ICS-87 — actividad y cumplimiento de seguimiento (equipo completo).
     const interaccionesEstaSemana = interactions.filter((i) => !i.deletedAt && inWindow(i.at, week.currentStart, now)).length;
@@ -392,7 +392,7 @@ export const reportes = query({
         valorTotal: ventasPeriodo.reduce((sum, s) => sum + s.amount, 0),
         conversion: conversionRate(ventasPeriodo.length, nuevos.length),
         detalle: ventasPeriodo
-          .map((s) => ({ prospectId: s.prospectId, name: nameById.get(s.prospectId) ?? "Prospecto eliminado", amount: s.amount, product: s.product, closedAt: s.closedAt }))
+          .map((s) => ({ _id: s._id, prospectId: s.prospectId, name: nameById.get(s.prospectId) ?? "Prospecto eliminado", amount: s.amount, product: s.product, closedAt: s.closedAt }))
           .sort((a, b) => b.closedAt - a.closedAt),
       },
       perdidas: {
