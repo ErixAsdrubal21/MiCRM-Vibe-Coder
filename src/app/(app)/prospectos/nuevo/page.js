@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { IconButton } from "@/design/components/core/IconButton.jsx";
@@ -12,6 +12,8 @@ import { errorMessage } from "@/lib/errors.js";
 
 export default function NuevoProspecto() {
   const router = useRouter();
+  // ICS-141: "Agregar como prospecto" desde /prospectos/buscar llega con ?empresa=&web=.
+  const searchParams = useSearchParams();
   const createProspect = useMutation(api.prospects.create);
 
   const [name, setName] = useState("");
@@ -19,6 +21,8 @@ export default function NuevoProspecto() {
   const [channel, setChannel] = useState(CHANNELS[0].value);
   const [interest, setInterest] = useState("");
   const [note, setNote] = useState("");
+  const [company, setCompany] = useState(() => searchParams.get("empresa") ?? "");
+  const [website, setWebsite] = useState(() => searchParams.get("web") ?? "");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -27,7 +31,7 @@ export default function NuevoProspecto() {
     setError("");
     setSubmitting(true);
     try {
-      const prospect = await createProspect({ name, phone, channel, interest, note });
+      const prospect = await createProspect({ name, phone, channel, interest, note, company, website });
       router.replace(prospectoHref(prospect._id));
     } catch (err) {
       setError(errorMessage(err, "No se pudo guardar el prospecto."));
@@ -70,6 +74,38 @@ export default function NuevoProspecto() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }}
+            />
+          </label>
+        </div>
+
+        <div className="field-group">
+          <label className="field-label" htmlFor="np-empresa">Empresa (opcional)</label>
+          <label className="mn-input mn-input--field">
+            <input
+              id="np-empresa"
+              type="text"
+              placeholder="Nombre del negocio"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              maxLength={120}
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }}
+            />
+          </label>
+        </div>
+
+        <div className="field-group">
+          <label className="field-label" htmlFor="np-web">Sitio web (opcional)</label>
+          <label className="mn-input mn-input--field">
+            <input
+              id="np-web"
+              type="text"
+              inputMode="url"
+              autoCapitalize="none"
+              placeholder="minegocio.mx"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              maxLength={200}
               style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }}
             />
           </label>

@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import TopBar from "@/nav/TopBar.js";
 import { KpiTile } from "@/design/components/core/KpiTile.jsx";
+import { Icon } from "@/design/components/core/Icon.jsx";
 import { useSession } from "@/lib/session.js";
 import "./dashboard.css";
 
@@ -32,7 +33,16 @@ export default function Dashboard() {
 
   return (
     <>
-      <TopBar title={`Hola, ${session.name}`} sub={weekRangeLabel()} />
+      <TopBar
+        title={`Hola, ${session.name}`}
+        sub={weekRangeLabel()}
+        action={
+          // ICS-141: la administradora no tiene "Prospectos" en su menú; entra aquí a buscar en la web.
+          <Link href="/prospectos/buscar" className="mn-icon-button" aria-label="Buscar prospectos en la web" title="Buscar prospectos en la web">
+            <Icon name="globe" size={20} />
+          </Link>
+        }
+      />
 
       {data && data.atRiskCount > 0 && (
         <Link href="/prospectos?risk=1" className="mn-alert-banner" style={{ textDecoration: "none" }}>

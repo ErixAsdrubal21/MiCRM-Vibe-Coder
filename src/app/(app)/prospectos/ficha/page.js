@@ -14,9 +14,11 @@ import { CHANNELS, CONTACT_TYPES, FOLLOW_UP_TYPES, CONTACT_ICON, STAGE_LABELS, L
 import { OUTCOME_VALUES, OUTCOME_LABELS, RESOLUTION_LABELS, OPPORTUNITY_OPEN_STAGES, LOSS_REASON_LABELS } from "../../../../../shared/crmEnums.js";
 import { todayISO, plusDaysISO, isoToLocalMs } from "@/lib/dates.js";
 import StageChangePicker from "@/components/StageChangePicker.js";
+import WebResearchSection from "@/components/WebResearchSection.js";
 import "./ficha.css";
 import { interaccionHref, ventaHref } from "@/lib/routes.js";
 import { errorMessage } from "@/lib/errors.js";
+import { isSafeLink, websiteHost } from "../../../../../shared/webResearch.js";
 
 const CHANNEL_LABEL_BY_VALUE = Object.fromEntries(CHANNELS.map((c) => [c.value, c.label]));
 const OUTCOME_TAG_VARIANT = { positivo: "success", negativo: "risk", neutro: "neutral", "sin-respuesta": "neutral" };
@@ -123,7 +125,15 @@ export default function FichaProspecto() {
   }
 
   function startEdit() {
-    setDraft({ name: prospect.name, phone: prospect.phone, channel: prospect.channel, interest: prospect.interest, note: prospect.note });
+    setDraft({
+      name: prospect.name,
+      phone: prospect.phone,
+      channel: prospect.channel,
+      interest: prospect.interest,
+      note: prospect.note,
+      company: prospect.company ?? "",
+      website: prospect.website ?? "",
+    });
     setError("");
     setEditing(true);
   }
@@ -240,6 +250,22 @@ export default function FichaProspecto() {
             </label>
           </div>
           <div className="field-group">
+            <label className="field-label" htmlFor="fp-empresa">Empresa (opcional)</label>
+            <label className="mn-input mn-input--field">
+              <input id="fp-empresa" value={draft.company} maxLength={120} onChange={(e) => setDraft({ ...draft, company: e.target.value })}
+                placeholder="Nombre del negocio"
+                style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }} />
+            </label>
+          </div>
+          <div className="field-group">
+            <label className="field-label" htmlFor="fp-web">Sitio web (opcional)</label>
+            <label className="mn-input mn-input--field">
+              <input id="fp-web" value={draft.website} maxLength={200} inputMode="url" autoCapitalize="none"
+                onChange={(e) => setDraft({ ...draft, website: e.target.value })} placeholder="minegocio.mx"
+                style={{ border: "none", background: "transparent", outline: "none", flex: 1, font: "inherit", color: "inherit" }} />
+            </label>
+          </div>
+          <div className="field-group">
             <span className="field-label">Canal de entrada</span>
             <div className="chip-row">
               {CHANNELS.map((c) => (
@@ -276,6 +302,13 @@ export default function FichaProspecto() {
             </div>
           </div>
           <div className="id-row"><Icon name="phone" size={16} />{prospect.phone}</div>
+          {prospect.company && <div className="id-row"><Icon name="briefcase" size={16} />{prospect.company}</div>}
+          {prospect.website && isSafeLink(prospect.website) && (
+            <div className="id-row">
+              <Icon name="globe" size={16} />
+              <a href={prospect.website} target="_blank" rel="noopener noreferrer">{websiteHost(prospect.website)}</a>
+            </div>
+          )}
           <div className="id-row"><Icon name="message-circle" size={16} />Llegó por {CHANNEL_LABEL_BY_VALUE[prospect.channel] ?? prospect.channel}</div>
         </div>
       )}
@@ -485,6 +518,8 @@ export default function FichaProspecto() {
           Ver más
         </button>
       )}
+
+      <WebResearchSection prospectId={prospect._id} canEdit={canEdit} onAddCompany={startEdit} />
 
       <p className="section-label">Historial de la relación</p>
       {timeline.results.length === 0 ? (
