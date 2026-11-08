@@ -12,6 +12,7 @@ import type * as access from "../access.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as email from "../email.js";
+import type * as exa from "../exa.js";
 import type * as followUps from "../followUps.js";
 import type * as http from "../http.js";
 import type * as interactions from "../interactions.js";
@@ -30,6 +31,7 @@ import type * as testHelpers from "../testHelpers.js";
 import type * as timeline from "../timeline.js";
 import type * as users from "../users.js";
 import type * as validators from "../validators.js";
+import type * as webResearch from "../webResearch.js";
 
 import type {
   ApiFromModules,
@@ -42,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
   email: typeof email;
+  exa: typeof exa;
   followUps: typeof followUps;
   http: typeof http;
   interactions: typeof interactions;
@@ -60,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   timeline: typeof timeline;
   users: typeof users;
   validators: typeof validators;
+  webResearch: typeof webResearch;
 }>;
 
 /**

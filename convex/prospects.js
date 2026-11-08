@@ -4,6 +4,19 @@ import { requireAuthenticatedUser, requireVendedor, requireOwnedProspect } from 
 import { lastContactAt, pendingFollowUp, recordTimelineEvent } from "./lib";
 import { channel, stage, lossReason } from "./validators.js";
 import { OPPORTUNITY_OPEN_STAGES } from "../shared/crmEnums.js";
+import { COMPANY_MAX, WEBSITE_MAX, normalizeWebsite } from "../shared/webResearch.js";
+
+/**
+ * ICS-138 — empresa y sitio web (opcionales). Vacío = se quita el campo.
+ * El sitio se guarda normalizado (`https://…`) o se rechaza.
+ */
+function companyFields({ company, website }) {
+  const c = (company ?? "").trim();
+  if (c.length > COMPANY_MAX) throw new ConvexError(`La empresa admite hasta ${COMPANY_MAX} caracteres.`);
+  const w = normalizeWebsite(website);
+  if (w === null || w.length > WEBSITE_MAX) throw new ConvexError("Escribe un sitio web válido, por ejemplo minegocio.mx.");
+  return { company: c || undefined, website: w || undefined };
+}
 
 /**
  * ICS-13 Lista: prospectos + lastContactAt. Sin interactions/nextFollowUp, la
@@ -151,12 +164,15 @@ export const create = mutation({
     channel,
     interest: v.string(),
     note: v.string(),
+    company: v.optional(v.string()),
+    website: v.optional(v.string()),
   },
-  handler: async (ctx, fields) => {
+  handler: async (ctx, { company, website, ...fields }) => {
     const user = await requireVendedor(ctx);
     const now = Date.now();
     const _id = await ctx.db.insert("prospects", {
       ...fields,
+      ...companyFields({ company, website }),
       stage: "nuevo",
       stageChangedAt: now,
       ownerId: user._id,
@@ -174,11 +190,22 @@ export const update = mutation({
     channel,
     interest: v.string(),
     note: v.string(),
+    company: v.optional(v.string()),
+    website: v.optional(v.string()),
   },
-  handler: async (ctx, { id, ...patch }) => {
+  handler: async (ctx, { id, company, website, ...patch }) => {
     // ICS-94: aislamiento de cartera — un vendedor solo edita sus propios prospectos.
-    await requireOwnedProspect(ctx, id);
-    await ctx.db.patch(id, patch);
+    const { prospect } = await requireOwnedProspect(ctx, id);
+    const next = companyFields({ company, website });
+    await ctx.db.patch(id, { ...patch, ...next });
+    // ICS-138: si cambió lo que se busca en Exa, lo guardado ya no es de esta empresa.
+    if (next.company !== prospect.company || next.website !== prospect.website) {
+      const saved = await ctx.db
+        .query("webResearch")
+        .withIndex("by_prospect_and_kind", (q) => q.eq("prospectId", id))
+        .collect();
+      for (const row of saved) await ctx.db.delete(row._id);
+    }
     return ctx.db.get(id);
   },
 });

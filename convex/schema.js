@@ -69,6 +69,9 @@ export default defineSchema({
     stageChangedAt: v.number(),
     lossReason: v.optional(lossReason),
     ownerId: v.id("users"),
+    // ICS-138 — opcionales. Son lo único que se manda a Exa (nunca nombre ni teléfono).
+    company: v.optional(v.string()),
+    website: v.optional(v.string()),
   })
     .index("by_stage", ["stage"])
     .index("by_owner", ["ownerId"]),
@@ -223,4 +226,31 @@ export default defineSchema({
   })
     .index("by_at", ["at"])
     .index("by_target_and_at", ["targetUserId", "at"]),
+
+  // ICS-138 — una fila por búsqueda pagada en Exa, para el tope diario por
+  // persona (convex/webResearch.js). Solo se conservan las últimas 24 h.
+  exaUsage: defineTable({
+    userId: v.id("users"),
+    at: v.number(),
+    kind: v.union(v.literal("perfil"), v.literal("noticias"), v.literal("prospectar")),
+  }).index("by_user_and_at", ["userId", "at"]),
+
+  // ICS-139/140 — último resultado de Exa por prospecto y tipo. Se reemplaza
+  // en cada búsqueda nueva y se borra si cambian la empresa o la web.
+  webResearch: defineTable({
+    prospectId: v.id("prospects"),
+    kind: v.union(v.literal("perfil"), v.literal("noticias")),
+    query: v.string(),
+    results: v.array(
+      v.object({
+        title: v.string(),
+        url: v.string(),
+        source: v.string(),
+        snippet: v.optional(v.string()),
+        publishedDate: v.optional(v.string()),
+      }),
+    ),
+    fetchedAt: v.number(),
+    fetchedBy: v.id("users"),
+  }).index("by_prospect_and_kind", ["prospectId", "kind"]),
 });

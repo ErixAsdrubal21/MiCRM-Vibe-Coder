@@ -1,0 +1,14 @@
+/* ICS-139..141 — resultados de la búsqueda web (Exa): ficha y /prospectos/buscar. */
+.web-card { background: var(--color-surface); border-radius: var(--radius-md); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.web-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.web-card__hint { font-family: var(--font-ui); font-size: 12.5px; color: var(--color-mute); margin: 0; }
+.web-card__error { font-family: var(--font-ui); font-size: 12px; color: var(--color-critical); margin: 0; }
+.web-results { display: flex; flex-direction: column; }
+.web-result { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-bottom: 1px solid var(--color-hairline); min-width: 0; }
+.web-result:last-child { border-bottom: none; }
+.web-result__title { font-family: var(--font-ui); font-size: 13.5px; font-weight: 700; color: var(--color-ink); text-decoration: none; overflow-wrap: anywhere; }
+.web-result__title:hover { text-decoration: underline; }
+.web-result__meta { font-family: var(--font-ui); font-size: 11px; color: var(--color-mute); margin: 0; overflow-wrap: anywhere; }
+.web-result__snippet { font-family: var(--font-ui); font-size: 12.5px; color: var(--color-body); margin: 2px 0 0; overflow-wrap: anywhere; }
+.web-result__actions { margin-top: 6px; }
+.web-footnote { font-family: var(--font-ui); font-size: 11px; color: var(--color-mute); margin: 0; }

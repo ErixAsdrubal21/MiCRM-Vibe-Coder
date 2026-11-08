@@ -44,7 +44,19 @@ export default function ProspectosList() {
 
   return (
     <>
-      <TopBar title="Prospectos" />
+      <TopBar
+        title="Prospectos"
+        action={
+          <button
+            className="mn-button mn-button--ghost"
+            style={{ height: 36, padding: "0 10px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}
+            onClick={() => router.push("/prospectos/buscar")}
+          >
+            <Icon name="globe" size={16} />
+            Buscar en la web
+          </button>
+        }
+      />
 
       <div className="search-row">
         <label className="mn-input">
